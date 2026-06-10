@@ -45,7 +45,7 @@ const completeOnboarding = async (req, res, next) => {
         const allowed = [
             'name', 'age', 'gender', 'interestedIn', 'bio', 'work', 'education',
             'interests', 'prompts', 'zodiac', 'height', 'exercise', 'relationship',
-            'religion', 'languages', 'location',
+            'religion', 'languages', 'location', 'maxDistance',
         ];
         const updates = {};
         allowed.forEach((field) => {
