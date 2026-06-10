@@ -1,4 +1,6 @@
 require('dotenv').config();
+const crypto = require('crypto');
+global.crypto = crypto; // Make crypto globally available for MongoDB
 const http = require('http');
 const { Server } = require('socket.io');
 const app = require('./app');

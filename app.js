@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -40,7 +41,7 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 
 // ─── Sanitization ──────────────────────────────────────
-app.use(mongoSanitize()); // Prevent NoSQL injection
+// app.use(mongoSanitize()); // Prevent NoSQL injection (Disabled temporarily due to Express 5 compatibility issue)
 
 // ─── Compression & Logging ─────────────────────────────
 app.use(compression());
