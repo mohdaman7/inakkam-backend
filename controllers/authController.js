@@ -4,6 +4,9 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { sendEmail } = require('../utils/sendEmail');
 
+// Simple in-memory store for OTPs during development
+const otpStore = new Map();
+
 const signAccess = (id) =>
     jwt.sign({ id }, process.env.JWT_ACCESS_SECRET, { expiresIn: process.env.JWT_ACCESS_EXPIRES });
 
@@ -217,4 +220,67 @@ const resetPassword = async (req, res, next) => {
     }
 };
 
-module.exports = { register, login, refreshToken, logout, forgotPassword, resetPassword };
+// @desc    Send OTP (Simulation)
+// @route   POST /api/auth/send-otp
+// @access  Private/Public
+const sendOtp = async (req, res, next) => {
+    try {
+        const { phone } = req.body;
+        if (!phone) return res.status(400).json({ success: false, message: 'Phone number is required' });
+
+        // Generate a 5 digit OTP
+        const otp = Math.floor(10000 + Math.random() * 90000).toString();
+        
+        // Store it with a 5-minute expiration
+        otpStore.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
+
+        // Simulate sending SMS (In production, you'd use Twilio here)
+        console.log(`\n=========================================`);
+        console.log(`📱 MOCK SMS SERVICE (Twilio Placeholder)`);
+        console.log(`To: +91 ${phone}`);
+        console.log(`Message: Your Inakkam verification code is ${otp}`);
+        console.log(`=========================================\n`);
+
+        return res.json({ success: true, message: 'OTP sent successfully (Check terminal)' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc    Verify OTP
+// @route   POST /api/auth/verify-otp
+// @access  Private/Public
+const verifyOtp = async (req, res, next) => {
+    try {
+        const { phone, otp } = req.body;
+        if (!phone || !otp) return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
+
+        const record = otpStore.get(phone);
+        if (!record) {
+            return res.status(400).json({ success: false, message: 'OTP expired or not sent' });
+        }
+
+        if (Date.now() > record.expiresAt) {
+            otpStore.delete(phone);
+            return res.status(400).json({ success: false, message: 'OTP expired' });
+        }
+
+        if (record.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+        }
+
+        // Clean up after successful verification
+        otpStore.delete(phone);
+
+        // Update user if they are logged in
+        if (req.user) {
+            await User.findByIdAndUpdate(req.user._id, { phone, verified: true });
+        }
+
+        return res.json({ success: true, message: 'Phone number verified successfully' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { register, login, refreshToken, logout, forgotPassword, resetPassword, sendOtp, verifyOtp };

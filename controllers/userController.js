@@ -45,12 +45,17 @@ const completeOnboarding = async (req, res, next) => {
         const allowed = [
             'name', 'age', 'gender', 'interestedIn', 'bio', 'work', 'education',
             'interests', 'prompts', 'zodiac', 'height', 'exercise', 'relationship',
-            'religion', 'languages', 'location', 'maxDistance',
+            'religion', 'languages', 'location', 'maxDistance', 'photos', 'phone'
         ];
         const updates = {};
         allowed.forEach((field) => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
         });
+        
+        if (req.body.photos && Array.isArray(req.body.photos)) {
+            updates.photos = req.body.photos.map(p => typeof p === 'string' ? { url: p, publicId: 'mock' } : p);
+        }
+
         updates.isOnboarded = req.body.isComplete === true;
 
         const user = await User.findByIdAndUpdate(req.user._id, { $set: updates }, { new: true, runValidators: true });
