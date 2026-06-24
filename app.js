@@ -21,6 +21,7 @@ const conversationRoutes = require('./routes/conversationRoutes');
 const storyRoutes = require('./routes/storyRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const membershipRoutes = require('./routes/membershipRoutes');
+const verificationRoutes = require('./routes/verificationRoutes');
 
 const app = express();
 
@@ -36,8 +37,8 @@ app.use(cors({
 }));
 
 // ─── Body Parsing ──────────────────────────────────────
-app.use(express.json({ limit: '10kb' })); // Prevent large payload attacks
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '50mb' })); // Increased for Base64 image uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 
 // ─── Sanitization ──────────────────────────────────────
@@ -65,6 +66,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/stories', storyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/membership', membershipRoutes);
+app.use('/api/verification', verificationRoutes);
 
 // ─── 404 Handler ───────────────────────────────────────
 app.use((req, res) => {

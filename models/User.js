@@ -55,11 +55,16 @@ const userSchema = new mongoose.Schema({
     relationship: { type: String, default: '' },
     religion: { type: String, default: '' },
     languages: { type: [String], default: [] },
-    gender: { type: String, enum: ['Man', 'Woman', 'Non-binary', 'Prefer not to say', ''], default: '' },
+    gender: { type: String, default: '' },
     interestedIn: { type: [String], default: [] },
     ageRange: { min: { type: Number, default: 18 }, max: { type: Number, default: 45 } },
     maxDistance: { type: Number, default: 50 }, // km
     verified: { type: Boolean, default: false },
+    verificationStatus: {
+        type: String,
+        enum: ['NOT_VERIFIED', 'PENDING_VERIFICATION', 'UNDER_VERIFICATION', 'VERIFIED', 'REJECTED'],
+        default: 'NOT_VERIFIED',
+    },
     badges: { type: [String], default: [] },
     membership: { type: membershipSchema, default: () => ({}) },
     isOnboarded: { type: Boolean, default: false },
