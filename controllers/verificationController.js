@@ -111,6 +111,10 @@ const submitVerification = async (req, res, next) => {
 
 // ─── Helper: upload base64 image to Cloudinary ─────────
 const cloudinaryUploadBase64 = async (base64String, userId) => {
+    if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === 'your_api_key') {
+        console.log(`[MOCK] Uploaded selfie for user ${userId}`);
+        return `https://via.placeholder.com/640x480?text=Live+Selfie`;
+    }
     const { cloudinary } = require('../config/cloudinary');
     const result = await cloudinary.uploader.upload(base64String, {
         folder: `inakkam/kyc/selfie`,

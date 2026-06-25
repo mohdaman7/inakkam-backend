@@ -22,6 +22,10 @@ const upload = multer({
 
 // ─── Upload buffer to Cloudinary ───────────────────────
 const uploadToCloudinary = (buffer, folder, filename) => {
+    if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === 'your_api_key') {
+        console.log(`[MOCK] Uploaded ${filename} to ${folder}`);
+        return Promise.resolve({ secure_url: `https://via.placeholder.com/800x600?text=${folder}+Document` });
+    }
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
             {
