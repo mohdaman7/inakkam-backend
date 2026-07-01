@@ -1,4 +1,8 @@
-require('dotenv').config();
+const path = require('path');
+const dns = require('dns');
+
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const crypto = require('crypto');
 global.crypto = crypto; // Make crypto globally available for MongoDB
 const http = require('http');
