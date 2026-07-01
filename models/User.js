@@ -78,6 +78,7 @@ const userSchema = new mongoose.Schema({
     likesCount: { type: Number, default: 0 },
     matchesCount: { type: Number, default: 0 },
     profileViews: { type: Number, default: 0 },
+    isFake: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.index({ location: '2dsphere' });

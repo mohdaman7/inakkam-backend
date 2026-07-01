@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Payment = require('../models/Payment');
 
 const PLANS = [
     {
@@ -82,6 +83,20 @@ const subscribe = async (req, res, next) => {
             },
             { new: true }
         );
+
+        const planInfo = PLANS.find(p => p.id === planId);
+        const price = planInfo ? planInfo.price : 0;
+
+        await Payment.create({
+            user: req.user._id,
+            type: 'subscription',
+            planId,
+            amount: price,
+            currency: 'USD',
+            status: 'completed',
+            paymentMethod: 'mock',
+            transactionId: 'sub_' + Math.random().toString(36).substring(2, 11),
+        });
 
         return res.json({ success: true, membership: user.membership, badges: user.badges });
     } catch (err) {

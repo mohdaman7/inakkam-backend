@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Admin = require('../models/Admin');
 
 const protect = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -29,4 +30,26 @@ const requirePremium = (req, res, next) => {
     next();
 };
 
-module.exports = { protect, requirePremium };
+// ─── Admin Authentication Middleware ───────────────────
+const requireAdmin = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, message: 'Admin authorization required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_ACCESS_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const admin = await Admin.findById(decoded.id);
+        if (!admin || !admin.isActive) {
+            return res.status(401).json({ success: false, message: 'Admin not found or inactive' });
+        }
+        req.admin = admin;
+        next();
+    } catch (err) {
+        return res.status(401).json({ success: false, message: 'Admin token invalid or expired' });
+    }
+};
+
+module.exports = { protect, requirePremium, requireAdmin };
