@@ -1,14 +1,41 @@
 const User = require('../models/User');
 const Swipe = require('../models/Swipe');
 
-// Compute a simple match score based on shared interests
-const computeMatchScore = (userA, userB) => {
+// Compute distance between two coordinates in km using Haversine formula
+const getDistance = (coords1, coords2) => {
+    if (!coords1 || !coords2 || coords1.length < 2 || coords2.length < 2) return null;
+    const [lon1, lat1] = coords1;
+    const [lon2, lat2] = coords2;
+    if ((lon1 === 0 && lat1 === 0) || (lon2 === 0 && lat2 === 0)) return null;
+
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+// Compute a match score based on shared interests and proximity
+const computeMatchScore = (userA, userB, distanceKm) => {
     const setA = new Set((userA.interests || []).map(i => i.toLowerCase()));
     const setB = new Set((userB.interests || []).map(i => i.toLowerCase()));
     const shared = [...setA].filter(i => setB.has(i)).length;
     const total = new Set([...setA, ...setB]).size;
-    if (total === 0) return 50;
-    return Math.min(99, Math.round(50 + (shared / total) * 50));
+    
+    let interestScore = total === 0 ? 50 : Math.round(50 + (shared / total) * 50);
+
+    // Factor in distance proximity (up to 10 points bonus if very close)
+    let proximityBonus = 0;
+    if (distanceKm !== null && distanceKm !== undefined) {
+        const maxD = userA.maxDistance || 50;
+        proximityBonus = Math.max(0, 1 - (distanceKm / maxD)) * 10;
+    }
+
+    return Math.min(99, Math.round(interestScore + proximityBonus));
 };
 
 // @desc    Get potential matches (paginated, already-swiped excluded)
@@ -49,13 +76,36 @@ const getDiscover = async (req, res, next) => {
             .limit(parseInt(limit))
             .lean();
 
-        const enriched = users.map(u => ({
-            ...u,
-            matchPercentage: computeMatchScore(me, u),
-            distance: Math.floor(Math.random() * 20) + 1 + ' miles away', // placeholder until geo is set up
-        }));
+        // Map users and calculate real distance and matching percentage
+        const enriched = users.map(u => {
+            let distanceVal = null;
+            let distanceStr = 'Unknown distance';
 
-        return res.json({ success: true, users: enriched, page: parseInt(page) });
+            if (me.location?.coordinates && u.location?.coordinates) {
+                const dist = getDistance(me.location.coordinates, u.location.coordinates);
+                if (dist !== null) {
+                    distanceVal = dist;
+                    distanceStr = dist < 1 ? 'Less than a km away' : `${Math.round(dist)} km away`;
+                }
+            }
+
+            return {
+                ...u,
+                matchPercentage: computeMatchScore(me, u, distanceVal),
+                distance: distanceStr,
+                distanceKm: distanceVal
+            };
+        });
+
+        // Optional: Filter out users beyond maxDistance if user has a location set
+        const filtered = enriched.filter(u => {
+            if (u.distanceKm !== null && me.maxDistance) {
+                return u.distanceKm <= me.maxDistance;
+            }
+            return true;
+        });
+
+        return res.json({ success: true, users: filtered, page: parseInt(page) });
     } catch (err) {
         next(err);
     }
