@@ -15,7 +15,9 @@ const chatSocket = (io) => {
 
         // Register user as online
         onlineUsers.set(userId, socket.id);
-        User.findByIdAndUpdate(userId, { isOnline: true, lastActive: Date.now() }).exec();
+        User.findByIdAndUpdate(userId, { isOnline: true, lastActive: Date.now() })
+            .exec()
+            .catch((err) => console.error('[Socket connect] Failed to update user status', err));
         io.emit('user_status', { userId, isOnline: true });
 
         console.log(`🟢 Socket connected: user=${userId} socket=${socket.id}`);
@@ -83,7 +85,9 @@ const chatSocket = (io) => {
         // Disconnect / offline
         socket.on('disconnect', () => {
             onlineUsers.delete(userId);
-            User.findByIdAndUpdate(userId, { isOnline: false, lastActive: Date.now() }).exec();
+            User.findByIdAndUpdate(userId, { isOnline: false, lastActive: Date.now() })
+                .exec()
+                .catch((err) => console.error('[Socket disconnect] Failed to update user status', err));
             io.emit('user_status', { userId, isOnline: false });
             console.log(`🔴 Socket disconnected: user=${userId}`);
         });

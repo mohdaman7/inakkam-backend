@@ -11,7 +11,10 @@ const app = require('./app');
 const connectDB = require('./config/db');
 const chatSocket = require('./sockets/chatSocket');
 
-const PORT = process.env.PORT || 5000;
+const DEFAULT_PORT = 5000;
+const basePort = Number(process.env.PORT) || DEFAULT_PORT;
+let currentPort = basePort;
+let attemptedFallback = false;
 
 // ─── Create HTTP + Socket.io server ───────────────────
 const server = http.createServer(app);
@@ -29,14 +32,37 @@ const io = new Server(server, {
 // ─── Attach Socket handlers ────────────────────────────
 chatSocket(io);
 
+// ─── Server error listener ─────────────────────────────
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        if (!attemptedFallback) {
+            attemptedFallback = true;
+            const fallbackPort = currentPort + 1;
+            console.warn(`⚠️ Port ${currentPort} is already in use. Trying port ${fallbackPort} instead...`);
+            currentPort = fallbackPort;
+            server.listen(currentPort);
+            return;
+        }
+        console.error(`❌ Port ${currentPort} is already in use. Stop the other process or set a different PORT.`);
+    } else {
+        console.error('❌ Server error:', err);
+    }
+    process.exit(1);
+});
+
 // ─── Start server after DB connects ───────────────────
 const startServer = async () => {
-    await connectDB();
-    server.listen(PORT, () => {
-        console.log(`\n🚀 Inakkam API running at http://localhost:${PORT}`);
-        console.log(`🔌 Socket.io listening on ws://localhost:${PORT}`);
-        console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}\n`);
-    });
+    try {
+        await connectDB();
+        server.listen(currentPort, () => {
+            console.log(`\n🚀 Inakkam API running at http://localhost:${currentPort}`);
+            console.log(`🔌 Socket.io listening on ws://localhost:${currentPort}`);
+            console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}\n`);
+        });
+    } catch (err) {
+        console.error('Startup failed:', err);
+        process.exit(1);
+    }
 };
 
 startServer();

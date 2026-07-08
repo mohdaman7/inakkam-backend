@@ -121,8 +121,10 @@ const getUserById = async (req, res, next) => {
         );
         if (!user || user.isDeleted) return res.status(404).json({ success: false, message: 'User not found' });
 
-        // Increment profile views
-        User.findByIdAndUpdate(req.params.id, { $inc: { profileViews: 1 } }).exec();
+        // Increment profile views asynchronously without blocking the response
+        User.findByIdAndUpdate(req.params.id, { $inc: { profileViews: 1 } })
+            .exec()
+            .catch((err) => console.error('[User getUserById] Failed to increment profile views', err));
 
         return res.json({ success: true, user });
     } catch (err) {
