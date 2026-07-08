@@ -20,9 +20,12 @@ const createLanguage = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Title is required' });
         }
 
+        const imageUrl = req.file ? req.file.path : '';
+
         const language = await Language.create({
             title: title.trim(),
             status: status !== undefined ? Number(status) : 1,
+            image: imageUrl,
         });
 
         return res.status(201).json({ success: true, language });
@@ -43,6 +46,7 @@ const updateLanguage = async (req, res, next) => {
 
         if (title) language.title = title.trim();
         if (status !== undefined) language.status = Number(status);
+        if (req.file) language.image = req.file.path;
 
         await language.save();
         return res.json({ success: true, language });

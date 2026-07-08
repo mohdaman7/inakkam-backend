@@ -20,6 +20,7 @@ const adminReportController = require('../controllers/admin/adminReportControlle
 const adminPaymentController = require('../controllers/admin/adminPaymentController');
 const adminFakeUserController = require('../controllers/admin/adminFakeUserController');
 const adminNotificationController = require('../controllers/admin/adminNotificationController');
+const adminGiftController = require('../controllers/admin/adminGiftController');
 
 // ─── Public Admin Routes ───────────────────────────────
 router.post('/login', adminAuthController.login);
@@ -28,6 +29,7 @@ router.post('/login', adminAuthController.login);
 router.use(requireAdmin);
 
 router.get('/me', adminAuthController.getMe);
+router.put('/profile', uploadPhoto.single('avatar'), adminAuthController.updateProfile);
 router.get('/stats', adminStatsController.getStats);
 
 // Users
@@ -42,8 +44,8 @@ router.delete('/interests/:id', adminInterestController.deleteInterest);
 
 // Languages
 router.get('/languages', adminLanguageController.getLanguages);
-router.post('/languages', adminLanguageController.createLanguage);
-router.put('/languages/:id', adminLanguageController.updateLanguage);
+router.post('/languages', uploadPhoto.single('image'), adminLanguageController.createLanguage);
+router.put('/languages/:id', uploadPhoto.single('image'), adminLanguageController.updateLanguage);
 router.delete('/languages/:id', adminLanguageController.deleteLanguage);
 
 // Religions
@@ -51,6 +53,12 @@ router.get('/religions', adminReligionController.getReligions);
 router.post('/religions', adminReligionController.createReligion);
 router.put('/religions/:id', adminReligionController.updateReligion);
 router.delete('/religions/:id', adminReligionController.deleteReligion);
+
+// Gifts
+router.get('/gifts', adminGiftController.getGifts);
+router.post('/gifts', uploadPhoto.single('image'), adminGiftController.createGift);
+router.put('/gifts/:id', uploadPhoto.single('image'), adminGiftController.updateGift);
+router.delete('/gifts/:id', adminGiftController.deleteGift);
 
 // Relation Goals
 router.get('/relation-goals', adminRelationGoalController.getRelationGoals);

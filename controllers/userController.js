@@ -1,6 +1,10 @@
 const User = require('../models/User');
 const { cloudinary } = require('../config/cloudinary');
 const Notification = require('../models/Notification');
+const Language = require('../models/Language');
+const Interest = require('../models/Interest');
+const Religion = require('../models/Religion');
+const RelationGoal = require('../models/RelationGoal');
 
 // @desc    Get current user profile
 // @route   GET /api/users/me
@@ -126,4 +130,28 @@ const getUserById = async (req, res, next) => {
     }
 };
 
-module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById };
+// @desc    Get all onboarding options
+// @route   GET /api/users/onboarding-options
+// @access  Private
+const getOnboardingOptions = async (req, res, next) => {
+    try {
+        const [languages, interests, religions, relationGoals] = await Promise.all([
+            Language.find({ status: 1 }).sort({ sortOrder: 1, createdAt: -1 }),
+            Interest.find({ status: 1 }).sort({ sortOrder: 1, createdAt: -1 }),
+            Religion.find({ status: 1 }).sort({ sortOrder: 1, createdAt: -1 }),
+            RelationGoal.find({ status: 1 }).sort({ sortOrder: 1, createdAt: -1 }),
+        ]);
+
+        return res.json({
+            success: true,
+            languages,
+            interests,
+            religions,
+            relationGoals
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions };

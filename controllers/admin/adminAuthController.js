@@ -68,4 +68,38 @@ const getMe = async (req, res, next) => {
     }
 };
 
-module.exports = { login, getMe };
+// @desc    Update Admin Profile
+// @route   PUT /api/admin/profile
+const updateProfile = async (req, res, next) => {
+    try {
+        const { name, email, password } = req.body;
+        const admin = await Admin.findById(req.admin._id).select('+passwordHash');
+        if (!admin) {
+            return res.status(404).json({ success: false, message: 'Admin not found' });
+        }
+
+        if (name) admin.name = name.trim();
+        if (email) admin.email = email.toLowerCase().trim();
+        if (password && password.trim()) admin.passwordHash = password;
+        if (req.file) admin.avatar = req.file.path;
+
+        await admin.save();
+
+        return res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            admin: {
+                _id: admin._id,
+                name: admin.name,
+                email: admin.email,
+                role: admin.role,
+                permissions: admin.permissions,
+                avatar: admin.avatar,
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { login, getMe, updateProfile };

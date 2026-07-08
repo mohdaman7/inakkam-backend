@@ -34,13 +34,22 @@ app.use(helmet());
 const allowedOrigins = [
     process.env.CLIENT_URL || 'http://localhost:5173',
     'http://localhost:5174',
+    'http://localhost:5175',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:5175'
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Allow if no origin (like mobile apps/curl) or if matches allowedOrigins
+        // or matches localhost/127.0.0.1 on any port in development
+        if (
+            !origin || 
+            allowedOrigins.includes(origin) ||
+            /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+            /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+        ) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
