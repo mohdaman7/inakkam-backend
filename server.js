@@ -11,7 +11,7 @@ const app = require('./app');
 const connectDB = require('./config/db');
 const chatSocket = require('./sockets/chatSocket');
 
-const DEFAULT_PORT = 5000;
+const DEFAULT_PORT = 7000;
 const basePort = Number(process.env.PORT) || DEFAULT_PORT;
 let currentPort = basePort;
 let attemptedFallback = false;
@@ -21,7 +21,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: process.env.CLIENT_URL || 'http://localhost:5173',
+        origin: process.env.CLIENT_URL || 'http://localhost:7001',
         methods: ['GET', 'POST'],
         credentials: true,
     },
