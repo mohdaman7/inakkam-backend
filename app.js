@@ -33,13 +33,12 @@ app.use(helmet());
 // ─── CORS ──────────────────────────────────────────────
 const allowedOrigins = [
     process.env.CLIENT_URL || 'http://localhost:7001',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:7001',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
-    'http://127.0.0.1:5175',
-    'http://127.0.0.1:7001'
+    'http://127.0.0.1:7001',
+    'http://127.0.0.1:7002',
+    'http://inakkam.co',
+    'https://inakkam.co',
+    'http://dashboard.inakkam.co',
+    'https://dashboard.inakkam.co',
 ];
 
 app.use(cors({
