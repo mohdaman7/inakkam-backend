@@ -35,6 +35,8 @@ const allowedOrigins = [
     process.env.CLIENT_URL || 'http://localhost:7001',
     'http://127.0.0.1:7001',
     'http://127.0.0.1:7002',
+    'http://82.29.165.57:7001',
+    'http://82.29.165.57:7002',
     'http://inakkam.co',
     'https://inakkam.co',
     'http://dashboard.inakkam.co',
