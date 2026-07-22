@@ -1,5 +1,6 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -67,6 +68,7 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' })); // Increased for Base64 image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Sanitization ──────────────────────────────────────
 // app.use(mongoSanitize()); // Prevent NoSQL injection (Disabled temporarily due to Express 5 compatibility issue)
