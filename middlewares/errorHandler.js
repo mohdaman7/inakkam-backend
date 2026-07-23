@@ -32,7 +32,7 @@ const errorHandler = (err, req, res, next) => {
     }
 
     if (process.env.NODE_ENV === 'development') {
-        console.error(`[ERROR] ${err.stack}`);
+        console.error('[ERROR]', err);
     }
 
     res.status(statusCode).json({
