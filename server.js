@@ -21,7 +21,10 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: process.env.CLIENT_URL || 'http://localhost:7001',
+        origin: (origin, callback) => {
+            // Allow any origin in dev or if no origin (mobile app/socket client)
+            callback(null, true);
+        },
         methods: ['GET', 'POST'],
         credentials: true,
     },

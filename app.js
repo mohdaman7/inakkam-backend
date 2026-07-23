@@ -77,6 +77,11 @@ if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
 }
 
+const path = require('path');
+
+// ─── Static Uploads Folder ─────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ─── Global Rate Limit ─────────────────────────────────
 app.use('/api', globalLimiter);
 

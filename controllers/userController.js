@@ -100,8 +100,23 @@ const deletePhoto = async (req, res, next) => {
         const photo = user.photos.id(req.params.photoId);
         if (!photo) return res.status(404).json({ success: false, message: 'Photo not found' });
 
-        // Delete from Cloudinary
-        await cloudinary.uploader.destroy(photo.publicId);
+        // Delete from Cloudinary if configured or local disk
+        try {
+            const { isCloudinaryConfigured, cloudinary } = require('../config/cloudinary');
+            if (photo.publicId && isCloudinaryConfigured()) {
+                await cloudinary.uploader.destroy(photo.publicId);
+            } else if (photo.url && photo.url.startsWith('/uploads/')) {
+                const fs = require('fs');
+                const path = require('path');
+                const localPath = path.join(__dirname, '../', photo.url);
+                if (fs.existsSync(localPath)) {
+                    fs.unlinkSync(localPath);
+                }
+            }
+        } catch (delErr) {
+            console.error('[deletePhoto] Failed to delete photo file:', delErr.message);
+        }
+
         user.photos.pull({ _id: req.params.photoId });
         await user.save();
 

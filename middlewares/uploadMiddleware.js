@@ -1,8 +1,10 @@
 const multer = require('multer');
-const { cloudinary } = require('../config/cloudinary');
+const path = require('path');
+const fs = require('fs');
+const { cloudinary, isCloudinaryConfigured } = require('../config/cloudinary');
 const { Readable } = require('stream');
 
-// ─── In-memory storage (pipe to Cloudinary) ────────────
+// ─── In-memory storage (buffers passed to Cloudinary or disk) ────
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
@@ -17,15 +19,27 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
     storage,
     fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-// ─── Upload buffer to Cloudinary ───────────────────────
+// ─── Upload buffer to Local Disk or Cloudinary ─────────
 const uploadToCloudinary = (buffer, folder, filename) => {
-    if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === 'your_api_key') {
-        console.log(`[MOCK] Uploaded ${filename} to ${folder}`);
-        return Promise.resolve({ secure_url: `https://via.placeholder.com/800x600?text=${folder}+Document` });
+    if (!isCloudinaryConfigured()) {
+        const targetDir = path.join(__dirname, '../uploads/kyc', folder);
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const crypto = require('crypto');
+        const ext = filename.endsWith('.pdf') ? '.pdf' : '.jpg';
+        const randomHex = crypto.randomBytes(8).toString('hex');
+        const cleanFilename = `${folder}_${Date.now()}_${randomHex}${ext}`;
+        const filePath = path.join(targetDir, cleanFilename);
+
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[LOCAL MULTER] Saved KYC file to /uploads/kyc/${folder}/${cleanFilename}`);
+        return Promise.resolve({ secure_url: `/uploads/kyc/${folder}/${cleanFilename}` });
     }
+
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
             {
@@ -47,3 +61,4 @@ const uploadToCloudinary = (buffer, folder, filename) => {
 };
 
 module.exports = { upload, uploadToCloudinary };
+

@@ -20,19 +20,32 @@ const register = async (req, res, next) => {
     try {
         const { name, email, phone, password, age } = req.body;
 
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, message: 'Name is required' });
+        }
+
         if (!email && !phone) {
             return res.status(400).json({ success: false, message: 'Email or phone is required' });
         }
 
-        const existingUser = email
-            ? await User.findOne({ email: email.toLowerCase() })
-            : await User.findOne({ phone });
-
-        if (existingUser) {
-            return res.status(409).json({ success: false, message: 'Account already exists with this email/phone' });
+        if (!password || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
         }
 
-        const user = new User({ name, email, phone, age, passwordHash: password });
+        const query = email ? { email: email.toLowerCase().trim() } : { phone: phone.trim() };
+        const existingUser = await User.findOne(query);
+
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: 'Account already exists with this email or phone number' });
+        }
+
+        const user = new User({
+            name: name.trim(),
+            email: email ? email.toLowerCase().trim() : undefined,
+            phone: phone ? phone.trim() : undefined,
+            age: age ? Number(age) : 21,
+            passwordHash: password,
+        });
         await user.save();
 
         const accessToken = signAccess(user._id);

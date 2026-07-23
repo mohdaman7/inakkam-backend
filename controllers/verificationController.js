@@ -109,13 +109,29 @@ const submitVerification = async (req, res, next) => {
     }
 };
 
-// ─── Helper: upload base64 image to Cloudinary ─────────
+// ─── Helper: upload base64 image to Local Disk or Cloudinary ─────────
 const cloudinaryUploadBase64 = async (base64String, userId) => {
-    if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === 'your_api_key') {
-        console.log(`[MOCK] Uploaded selfie for user ${userId}`);
-        return `https://via.placeholder.com/640x480?text=Live+Selfie`;
+    const { isCloudinaryConfigured, cloudinary } = require('../config/cloudinary');
+    const path = require('path');
+    const fs = require('fs');
+
+    if (!isCloudinaryConfigured()) {
+        const targetDir = path.join(__dirname, '../uploads/kyc/selfie');
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const crypto = require('crypto');
+        const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        const buffer = matches ? Buffer.from(matches[2], 'base64') : Buffer.from(base64String, 'base64');
+        const randomHex = crypto.randomBytes(8).toString('hex');
+        const filename = `selfie_${userId}_${Date.now()}_${randomHex}.jpg`;
+        const filePath = path.join(targetDir, filename);
+
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[LOCAL MULTER] Saved selfie to /uploads/kyc/selfie/${filename}`);
+        return `/uploads/kyc/selfie/${filename}`;
     }
-    const { cloudinary } = require('../config/cloudinary');
+
     const result = await cloudinary.uploader.upload(base64String, {
         folder: `inakkam/kyc/selfie`,
         public_id: `${userId}_selfie`,
@@ -192,7 +208,7 @@ const updateVerificationStatus = async (req, res, next) => {
                     status,
                     rejectionReason: status === 'REJECTED' ? rejectionReason : undefined,
                     reviewedAt: new Date(),
-                    reviewedBy: req.user._id,
+                    reviewedBy: req.admin?._id || req.user?._id,
                 },
             },
             { new: true }

@@ -21,6 +21,7 @@ const adminPaymentController = require('../controllers/admin/adminPaymentControl
 const adminFakeUserController = require('../controllers/admin/adminFakeUserController');
 const adminNotificationController = require('../controllers/admin/adminNotificationController');
 const adminGiftController = require('../controllers/admin/adminGiftController');
+const verificationController = require('../controllers/verificationController');
 
 // ─── Public Admin Routes ───────────────────────────────
 router.post('/login', adminAuthController.login);
@@ -110,5 +111,9 @@ router.post('/fake-users', adminFakeUserController.generateFakeUsers);
 
 // Push Notifications
 router.post('/push-notification', uploadPhoto.single('image'), adminNotificationController.sendPushNotification);
+
+// Verifications / KYC
+router.get('/verifications', verificationController.getAllVerifications);
+router.patch('/verifications/:id/status', verificationController.updateVerificationStatus);
 
 module.exports = router;

@@ -85,7 +85,7 @@ userSchema.index({ location: '2dsphere' });
 
 // Hash password before save
 userSchema.pre('save', async function () {
-    if (!this.isModified('passwordHash')) return;
+    if (!this.isModified('passwordHash') || !this.passwordHash) return;
     this.passwordHash = await bcrypt.hash(this.passwordHash, 12);
 });
 

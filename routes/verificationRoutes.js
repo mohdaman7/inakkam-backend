@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middlewares/auth');
+const { protect, requireAdmin } = require('../middlewares/auth');
 const { upload } = require('../middlewares/uploadMiddleware');
 const {
     submitVerification,
@@ -25,7 +25,7 @@ router.post(
 );
 
 // ─── Admin Routes ───────────────────────────────────────
-router.get('/admin/all',          protect, getAllVerifications);
-router.patch('/admin/:id/status', protect, updateVerificationStatus);
+router.get('/admin/all',          requireAdmin, getAllVerifications);
+router.patch('/admin/:id/status', requireAdmin, updateVerificationStatus);
 
 module.exports = router;
