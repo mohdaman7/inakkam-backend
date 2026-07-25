@@ -7,10 +7,10 @@ dns.setServers(['8.8.8.8', '1.1.1.1']);
 const connectDB = async () => {
     try {
         console.log('Attempting to connect to MongoDB...');
-        const mongoUri = process.env.MONGODB_URI;
+        const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
         if (!mongoUri || typeof mongoUri !== 'string' || !mongoUri.trim()) {
-            throw new Error('Missing MONGODB_URI environment variable. Ensure .env contains MONGODB_URI and dotenv is loading correctly.');
+            throw new Error('Missing MongoDB connection string. Ensure .env contains MONGODB_URI or MONGO_URI and dotenv is loading correctly.');
         }
 
         const conn = await mongoose.connect(mongoUri);

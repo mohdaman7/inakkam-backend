@@ -28,6 +28,9 @@ const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 
+// Trust proxy headers so rate limiting, IP detection, and forwarded hosts work correctly behind nginx / reverse proxy.
+app.set('trust proxy', true);
+
 // ─── Security Headers ──────────────────────────────────
 app.use(helmet());
 
@@ -63,6 +66,13 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
 
 // ─── Body Parsing ──────────────────────────────────────
 app.use(express.json({ limit: '50mb' })); // Increased for Base64 image uploads
