@@ -37,6 +37,14 @@ router.get('/stats', adminStatsController.getStats);
 router.get('/users', adminUserController.getUsers);
 router.patch('/users/:id/block', adminUserController.toggleBlockUser);
 
+// Elite Agents
+router.get('/elite-agents', adminUserController.getEliteAgents);
+router.post('/elite-agents', adminUserController.createEliteAgent);
+router.get('/elite-agents/:id', adminUserController.getEliteAgentById);
+router.put('/elite-agents/:id', adminUserController.updateEliteAgent);
+router.patch('/elite-agents/:id/status', adminUserController.toggleEliteAgentStatus);
+router.post('/elite-agents/:id/reset-password', adminUserController.resetEliteAgentPassword);
+
 // Interests
 router.get('/interests', adminInterestController.getInterests);
 router.post('/interests', uploadPhoto.single('image'), adminInterestController.createInterest);

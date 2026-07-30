@@ -79,6 +79,28 @@ const userSchema = new mongoose.Schema({
     matchesCount: { type: Number, default: 0 },
     profileViews: { type: Number, default: 0 },
     isFake: { type: Boolean, default: false },
+    isEliteAgent: { type: Boolean, default: false },
+    dob: { type: String, default: '' },
+    state: { type: String, default: '' },
+    city: { type: String, default: '' },
+    weight: { type: String, default: '' },
+    occupation: { type: String, default: '' },
+    payoutDetails: {
+        bankName: { type: String, default: '' },
+        accountNumber: { type: String, default: '' },
+        ifsc: { type: String, default: '' },
+        upiId: { type: String, default: '' }
+    },
+    wallet: {
+        balance: { type: Number, default: 0 },
+        totalCoins: { type: Number, default: 0 },
+        todayCoins: { type: Number, default: 0 },
+        weeklyCoins: { type: Number, default: 0 },
+        monthlyCoins: { type: Number, default: 0 },
+        lifetimeEarnings: { type: Number, default: 0 },
+        pendingPayout: { type: Number, default: 0 },
+        paidAmount: { type: Number, default: 0 }
+    }
 }, { timestamps: true });
 
 userSchema.index({ location: '2dsphere' });
