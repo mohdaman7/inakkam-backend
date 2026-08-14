@@ -25,11 +25,12 @@ const membershipRoutes = require('./routes/membershipRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const enablexRoutes = require('./routes/enablexRoutes');
 
 const app = express();
 
-// Trust proxy headers so rate limiting, IP detection, and forwarded hosts work correctly behind nginx / reverse proxy.
-app.set('trust proxy', true);
+// Trust proxy headers correctly behind nginx / reverse proxy. Set to number of reverse proxies (1) for security.
+app.set('trust proxy', 1);
 
 // ─── Security Headers ──────────────────────────────────
 app.use(helmet());
@@ -108,6 +109,7 @@ app.use('/api/membership', membershipRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/enablex', enablexRoutes);
 
 // ─── 404 Handler ───────────────────────────────────────
 app.use((req, res) => {

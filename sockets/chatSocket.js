@@ -82,6 +82,48 @@ const chatSocket = (io) => {
             }
         });
 
+        // Call signaling
+        socket.on('call_user', ({ conversationId, targetUserId, roomId, callerName, callerPhoto, callType }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('incoming_call', {
+                    conversationId,
+                    callerId: userId,
+                    callerName,
+                    callerPhoto,
+                    roomId,
+                    callType
+                });
+                console.log(`📞 Socket: call_user from ${userId} to ${targetUserId} (room=${roomId})`);
+            } else {
+                socket.emit('call_error', { message: 'User is offline' });
+            }
+        });
+
+        socket.on('accept_call', ({ conversationId, callerId }) => {
+            const callerSocketId = onlineUsers.get(callerId);
+            if (callerSocketId) {
+                io.to(callerSocketId).emit('call_accepted', { conversationId, receiverId: userId });
+                console.log(`📞 Socket: accept_call from ${userId} to caller ${callerId}`);
+            }
+        });
+
+        socket.on('reject_call', ({ conversationId, callerId }) => {
+            const callerSocketId = onlineUsers.get(callerId);
+            if (callerSocketId) {
+                io.to(callerSocketId).emit('call_rejected', { conversationId, receiverId: userId });
+                console.log(`📞 Socket: reject_call from ${userId} to caller ${callerId}`);
+            }
+        });
+
+        socket.on('end_call', ({ conversationId, targetUserId }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('call_ended', { conversationId });
+                console.log(`📞 Socket: end_call from ${userId} to ${targetUserId}`);
+            }
+        });
+
         // Disconnect / offline
         socket.on('disconnect', () => {
             onlineUsers.delete(userId);

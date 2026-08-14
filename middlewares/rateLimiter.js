@@ -7,6 +7,7 @@ const globalLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please try again later.' },
+    validate: { trustProxy: false },
 });
 
 const authLimiter = rateLimit({
@@ -15,6 +16,7 @@ const authLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many login attempts, please try again in 15 minutes.' },
+    validate: { trustProxy: false },
 });
 
 const registerLimiter = rateLimit({
@@ -23,6 +25,7 @@ const registerLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many accounts created from this IP, please try later.' },
+    validate: { trustProxy: false },
 });
 
 const swipeLimiter = rateLimit({
@@ -31,6 +34,7 @@ const swipeLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Swipe limit reached, upgrade to Premium for unlimited swipes.' },
+    validate: { trustProxy: false },
 });
 
 module.exports = { globalLimiter, authLimiter, registerLimiter, swipeLimiter };
