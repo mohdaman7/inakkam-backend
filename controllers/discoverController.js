@@ -25,7 +25,7 @@ const computeMatchScore = (userA, userB, distanceKm) => {
     const setB = new Set((userB.interests || []).map(i => i.toLowerCase()));
     const shared = [...setA].filter(i => setB.has(i)).length;
     const total = new Set([...setA, ...setB]).size;
-    
+
     let interestScore = total === 0 ? 50 : Math.round(50 + (shared / total) * 50);
 
     // Factor in distance proximity (up to 10 points bonus if very close)
@@ -55,26 +55,54 @@ const getDiscover = async (req, res, next) => {
 
         const filter = {
             _id: { $nin: excludedIds },
-            isDeleted: false,
-            isOnboarded: true,
+            isDeleted: { $ne: true },
         };
 
-        // Filter by gender preference
+        // Flexible gender preference matching
         if (me.interestedIn && me.interestedIn.length > 0) {
-            filter.gender = { $in: me.interestedIn };
+            const hasEveryone = me.interestedIn.some(i => ['everyone', 'both', 'all', 'any'].includes(String(i).toLowerCase()));
+            if (!hasEveryone) {
+                const regexes = me.interestedIn.map(item => {
+                    const str = String(item).toLowerCase();
+                    if (str === 'men' || str === 'male' || str === 'man') return /^(male|men|man)$/i;
+                    if (str === 'women' || str === 'female' || str === 'woman') return /^(female|women|woman)$/i;
+                    return new RegExp(`^${item}$`, 'i');
+                });
+                filter.gender = { $in: regexes };
+            }
         }
 
-        // Filter by age range preference
-        if (me.ageRange) {
+        // Filter by age range preference if specified
+        if (me.ageRange && (me.ageRange.min || me.ageRange.max)) {
             filter.age = { $gte: me.ageRange.min || 18, $lte: me.ageRange.max || 99 };
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
-        const users = await User.find(filter)
+        let users = await User.find(filter)
             .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline')
             .skip(skip)
             .limit(parseInt(limit))
             .lean();
+
+        // Fallback: If strict query yields fewer than 3 users, relax swiped/gender filters so user always gets profiles
+        if (users.length < 3) {
+            const fallbackFilter = {
+                _id: { $ne: me._id },
+                isDeleted: { $ne: true },
+            };
+            const fallbackUsers = await User.find(fallbackFilter)
+                .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline')
+                .limit(parseInt(limit))
+                .lean();
+
+            const existingIds = new Set(users.map(u => u._id.toString()));
+            for (const fbUser of fallbackUsers) {
+                if (!existingIds.has(fbUser._id.toString())) {
+                    users.push(fbUser);
+                    existingIds.add(fbUser._id.toString());
+                }
+            }
+        }
 
         // Map users and calculate real distance and matching percentage
         const enriched = users.map(u => {
@@ -97,15 +125,7 @@ const getDiscover = async (req, res, next) => {
             };
         });
 
-        // Optional: Filter out users beyond maxDistance if user has a location set
-        const filtered = enriched.filter(u => {
-            if (u.distanceKm !== null && me.maxDistance) {
-                return u.distanceKm <= me.maxDistance;
-            }
-            return true;
-        });
-
-        return res.json({ success: true, users: filtered, page: parseInt(page) });
+        return res.json({ success: true, users: enriched, page: parseInt(page) });
     } catch (err) {
         next(err);
     }
