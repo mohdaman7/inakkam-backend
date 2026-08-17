@@ -32,15 +32,29 @@ const chatSocket = (io) => {
             try {
                 if (!text || !text.trim()) return;
 
-                // Verify user is a participant in the conversation
-                const conversation = await Conversation.findOne({
+                let conversation = await Conversation.findOne({
                     _id: conversationId,
                     participants: userId,
                 });
+
+                if (!conversation) {
+                    const targetUserId = (conversationId || '').replace(/^chat_/, '');
+                    if (targetUserId && targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
+                        conversation = await Conversation.findOne({
+                            participants: { $all: [userId, targetUserId] }
+                        });
+                        if (!conversation) {
+                            conversation = await Conversation.create({
+                                participants: [userId, targetUserId]
+                            });
+                        }
+                    }
+                }
+
                 if (!conversation) return;
 
                 const message = await Message.create({
-                    conversation: conversationId,
+                    conversation: conversation._id,
                     sender: userId,
                     text: text.trim(),
                     readBy: [userId],
@@ -53,7 +67,10 @@ const chatSocket = (io) => {
                 const populated = await Message.findById(message._id).populate('sender', 'name photos').lean();
 
                 // Broadcast to everyone in the room (including sender for confirmation)
-                io.to(conversationId).emit('new_message', { ...populated, tempId });
+                io.to(conversation._id.toString()).emit('new_message', { ...populated, tempId });
+                if (conversationId && conversationId !== conversation._id.toString()) {
+                    io.to(conversationId).emit('new_message', { ...populated, tempId });
+                }
             } catch (err) {
                 socket.emit('message_error', { tempId, message: 'Failed to send message' });
                 console.error('[Socket send_message]', err);
