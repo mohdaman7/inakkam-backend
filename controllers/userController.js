@@ -25,9 +25,10 @@ const getMe = async (req, res, next) => {
 const updateMe = async (req, res, next) => {
     try {
         const allowed = [
-            'name', 'bio', 'work', 'education', 'interests', 'prompts',
+            'name', 'age', 'bio', 'work', 'education', 'interests', 'prompts',
             'zodiac', 'height', 'exercise', 'relationship', 'religion',
             'languages', 'gender', 'interestedIn', 'ageRange', 'maxDistance', 'location',
+            'dob', 'occupation', 'weight', 'state', 'city',
         ];
         const updates = {};
         allowed.forEach((field) => {
@@ -55,7 +56,7 @@ const completeOnboarding = async (req, res, next) => {
         allowed.forEach((field) => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
         });
-        
+
         if (req.body.photos && Array.isArray(req.body.photos)) {
             updates.photos = req.body.photos.map(p => typeof p === 'string' ? { url: p, publicId: 'mock' } : p);
         }
