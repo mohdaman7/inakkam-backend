@@ -37,4 +37,13 @@ const swipeLimiter = rateLimit({
     validate: { trustProxy: false },
 });
 
-module.exports = { globalLimiter, authLimiter, registerLimiter, swipeLimiter };
+const otpLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: isDev ? 30 : 5, // 5 requests per 5 minutes in prod, 30 in dev
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many OTP requests. Please try again after 5 minutes.' },
+    validate: { trustProxy: false },
+});
+
+module.exports = { globalLimiter, authLimiter, registerLimiter, swipeLimiter, otpLimiter };
