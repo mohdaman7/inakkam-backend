@@ -1,6 +1,9 @@
+const path = require('path');
 const crypto = require('crypto');
 const dns = require('dns');
 const mongoose = require('mongoose');
+
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 if (process.env.NODE_ENV !== 'production') {
     dns.setServers(['8.8.8.8', '1.1.1.1']);
