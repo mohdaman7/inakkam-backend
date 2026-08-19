@@ -1,7 +1,18 @@
 const path = require('path');
+const fs = require('fs');
 const dns = require('dns');
 
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+const envPath = path.resolve(__dirname, '.env');
+console.log(`📂 Loading .env from: ${envPath}`);
+console.log(`📂 .env file exists: ${fs.existsSync(envPath)}`);
+
+const dotenvResult = require('dotenv').config({ path: envPath });
+if (dotenvResult.error) {
+    console.error('❌ dotenv failed to load .env file:', dotenvResult.error.message);
+} else {
+    console.log('✅ dotenv loaded successfully');
+    console.log(`   MONGODB_URI present: ${!!process.env.MONGODB_URI}`);
+}
 
 if (process.env.NODE_ENV !== 'production') {
     dns.setServers(['8.8.8.8', '1.1.1.1']);
