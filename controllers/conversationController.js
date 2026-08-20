@@ -142,4 +142,55 @@ const sendMessage = async (req, res, next) => {
     }
 };
 
-module.exports = { getConversations, getMessages, sendMessage };
+// @desc    Delete a message
+// @route   DELETE /api/conversations/:id/messages/:messageId
+// @access  Private
+const deleteMessage = async (req, res, next) => {
+    try {
+        const { id: conversationId, messageId } = req.params;
+        const currentUserId = req.user._id;
+
+        // Find the message
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, message: 'Message not found' });
+        }
+
+        // Check if the user is the sender of the message
+        if (message.sender.toString() !== currentUserId.toString()) {
+            return res.status(403).json({ success: false, message: 'Unauthorized to delete this message' });
+        }
+
+        // Delete the message
+        await Message.deleteOne({ _id: messageId });
+
+        // Update the conversation's last message if this was the last message
+        const conversation = await Conversation.findById(conversationId);
+        if (conversation && conversation.lastMessage && conversation.lastMessage.toString() === messageId) {
+            // Find the new last message
+            const newLastMessage = await Message.findOne({ conversation: conversationId })
+                .sort({ createdAt: -1 });
+
+            if (newLastMessage) {
+                conversation.lastMessage = newLastMessage._id;
+                conversation.lastMessageAt = newLastMessage.createdAt;
+            } else {
+                conversation.lastMessage = null;
+                conversation.lastMessageAt = null;
+            }
+            await conversation.save();
+        }
+
+        // Emit the socket event to delete the message on the frontend for all room members
+        const io = req.app.get('io');
+        if (io) {
+            io.to(conversationId).emit('message_deleted', { conversationId, messageId });
+        }
+
+        return res.json({ success: true, message: 'Message deleted successfully' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { getConversations, getMessages, sendMessage, deleteMessage };

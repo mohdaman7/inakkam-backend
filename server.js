@@ -46,6 +46,9 @@ const io = new Server(server, {
     pingInterval: 25000,
 });
 
+// Expose io instance to express app
+app.set('io', io);
+
 // ─── Attach Socket handlers ────────────────────────────
 chatSocket(io);
 
