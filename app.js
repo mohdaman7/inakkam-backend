@@ -94,7 +94,7 @@ if (process.env.NODE_ENV === 'development') {
 app.use('/api', globalLimiter);
 
 // ─── Health Check ──────────────────────────────────────
-app.get('/health', (req, res) => res.json({ success: true, status: 'Inakkam API is running 🔥', timestamp: new Date().toISOString() }));
+app.get('/health', (req, res) => res.json({ success: true, status: 'Inakkam API is running version 1.0.0🔥', timestamp: new Date().toISOString() }));
 
 // ─── API Routes ────────────────────────────────────────
 app.use('/api/auth', authRoutes);
