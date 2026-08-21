@@ -1,5 +1,6 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const Match = require('../models/Match');
 
 // @desc    Get all conversations for current user
 // @route   GET /api/conversations
@@ -43,21 +44,43 @@ const getConversations = async (req, res, next) => {
 
 // Helper function to find or create a conversation flexible with ObjectId or chat_<targetUserId>
 const findOrCreateConversation = async (paramId, currentUserId) => {
+    let targetUserId = null;
+    let existingConv = null;
+
     // 1. Try finding by conversation _id directly if valid ObjectId
     if (paramId && paramId.match(/^[0-9a-fA-F]{24}$/)) {
-        const conv = await Conversation.findOne({ _id: paramId, participants: currentUserId });
-        if (conv) return conv;
+        existingConv = await Conversation.findOne({ _id: paramId, participants: currentUserId });
+        if (existingConv) {
+            const other = existingConv.participants.find(p => p.toString() !== currentUserId.toString());
+            targetUserId = other ? other.toString() : null;
+        }
     }
 
     // 2. Try target user ID (strip "chat_" if present)
-    const targetUserId = (paramId || '').replace(/^chat_/, '');
+    if (!targetUserId) {
+        targetUserId = (paramId || '').replace(/^chat_/, '');
+    }
+
     if (targetUserId && targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
+        // Enforce Mutual Match Check
+        const activeMatch = await Match.findOne({
+            users: { $all: [currentUserId, targetUserId] },
+            isActive: true
+        });
+
+        if (!activeMatch) {
+            return null; // Not mutually matched
+        }
+
+        if (existingConv) return existingConv;
+
         let conv = await Conversation.findOne({
             participants: { $all: [currentUserId, targetUserId] }
         });
         if (!conv) {
             conv = await Conversation.create({
-                participants: [currentUserId, targetUserId]
+                participants: [currentUserId, targetUserId],
+                match: activeMatch._id
             });
         }
         return conv;
@@ -73,7 +96,12 @@ const getMessages = async (req, res, next) => {
     try {
         const conversation = await findOrCreateConversation(req.params.id, req.user._id);
 
-        if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+        if (!conversation) {
+            return res.status(403).json({
+                success: false,
+                message: 'Messaging is only allowed between mutual matches.'
+            });
+        }
 
         const convId = conversation._id;
         const { page = 1, limit = 30 } = req.query;
@@ -122,7 +150,12 @@ const sendMessage = async (req, res, next) => {
 
         const conversation = await findOrCreateConversation(req.params.id, req.user._id);
 
-        if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+        if (!conversation) {
+            return res.status(403).json({
+                success: false,
+                message: 'Messaging is only allowed between mutual matches.'
+            });
+        }
 
         const message = await Message.create({
             conversation: conversation._id,

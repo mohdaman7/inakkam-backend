@@ -26,8 +26,11 @@ const verificationRoutes = require('./routes/verificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const enablexRoutes = require('./routes/enablexRoutes');
+const coinRoutes = require('./routes/coinRoutes');
+const payoutRoutes = require('./routes/payoutRoutes');
 
 const app = express();
+
 
 // Trust proxy headers correctly behind nginx / reverse proxy. Set to number of reverse proxies (1) for security.
 app.set('trust proxy', 1);
@@ -110,6 +113,9 @@ app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/enablex', enablexRoutes);
+app.use('/api/coins', coinRoutes);
+app.use('/api/payout', payoutRoutes);
+
 
 // ─── 404 Handler ───────────────────────────────────────
 app.use((req, res) => {

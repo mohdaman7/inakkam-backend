@@ -120,4 +120,41 @@ const undoSwipe = async (req, res, next) => {
     }
 };
 
-module.exports = { recordSwipe, undoSwipe };
+// @desc    Get profiles of users who swiped right or superliked current user
+// @route   GET /api/swipe/received-likes
+// @access  Private
+const getReceivedLikes = async (req, res, next) => {
+    try {
+        const me = req.user;
+
+        // Find users who swiped right or superliked me
+        const incomingSwipes = await Swipe.find({
+            swiped: me._id,
+            action: { $in: ['right', 'superlike'] }
+        })
+            .populate('swiper', 'name age photos bio location work education height weight occupation city state verified badges isOnline lastActive')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Find users current user has already swiped on
+        const mySwipes = await Swipe.find({ swiper: me._id }).select('swiped').lean();
+        const mySwipedUserIds = new Set(mySwipes.map(s => s.swiped.toString()));
+
+        // Filter out users already swiped on
+        const unswipedLikes = incomingSwipes.filter(s => s.swiper && !mySwipedUserIds.has(s.swiper._id.toString()));
+
+        const likes = unswipedLikes.map(s => ({
+            swipeId: s._id,
+            action: s.action,
+            likedAt: s.createdAt,
+            user: s.swiper
+        }));
+
+        return res.json({ success: true, count: likes.length, likes });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { recordSwipe, undoSwipe, getReceivedLikes };
+

@@ -80,6 +80,8 @@ const userSchema = new mongoose.Schema({
     profileViews: { type: Number, default: 0 },
     isFake: { type: Boolean, default: false },
     isEliteAgent: { type: Boolean, default: false },
+    role: { type: String, enum: ['user', 'staff', 'admin'], default: 'user' },
+    isStaff: { type: Boolean, default: false },
     dob: { type: String, default: '' },
     state: { type: String, default: '' },
     city: { type: String, default: '' },
@@ -92,16 +94,18 @@ const userSchema = new mongoose.Schema({
         upiId: { type: String, default: '' }
     },
     wallet: {
-        balance: { type: Number, default: 0 },
+        balance: { type: Number, default: 0 },         // User coin balance
+        earnedCoins: { type: Number, default: 0 },     // Staff earned coins balance
         totalCoins: { type: Number, default: 0 },
         todayCoins: { type: Number, default: 0 },
         weeklyCoins: { type: Number, default: 0 },
         monthlyCoins: { type: Number, default: 0 },
-        lifetimeEarnings: { type: Number, default: 0 },
-        pendingPayout: { type: Number, default: 0 },
-        paidAmount: { type: Number, default: 0 }
+        lifetimeEarnings: { type: Number, default: 0 }, // Rupee earnings
+        pendingPayout: { type: Number, default: 0 },    // Rupee pending payout
+        paidAmount: { type: Number, default: 0 }        // Rupee paid
     }
 }, { timestamps: true });
+
 
 userSchema.index({ location: '2dsphere' });
 

@@ -1,5 +1,6 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const Match = require('../models/Match');
 const User = require('../models/User');
 
 // Map of userId -> socketId for presence tracking
@@ -37,21 +38,42 @@ const chatSocket = (io) => {
                     participants: userId,
                 });
 
-                if (!conversation) {
-                    const targetUserId = (conversationId || '').replace(/^chat_/, '');
-                    if (targetUserId && targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
-                        conversation = await Conversation.findOne({
-                            participants: { $all: [userId, targetUserId] }
-                        });
-                        if (!conversation) {
-                            conversation = await Conversation.create({
-                                participants: [userId, targetUserId]
-                            });
-                        }
-                    }
+                let targetUserId = null;
+
+                if (conversation) {
+                    const other = conversation.participants.find(p => p.toString() !== userId.toString());
+                    targetUserId = other ? other.toString() : null;
+                } else {
+                    targetUserId = (conversationId || '').replace(/^chat_/, '');
                 }
 
-                if (!conversation) return;
+                if (!targetUserId || !targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
+                    socket.emit('message_error', { tempId, message: 'Invalid recipient' });
+                    return;
+                }
+
+                // Enforce Mutual Match Requirement
+                const activeMatch = await Match.findOne({
+                    users: { $all: [userId, targetUserId] },
+                    isActive: true
+                });
+
+                if (!activeMatch) {
+                    socket.emit('message_error', { tempId, message: 'Messaging is restricted to mutual matches only.' });
+                    return;
+                }
+
+                if (!conversation) {
+                    conversation = await Conversation.findOne({
+                        participants: { $all: [userId, targetUserId] }
+                    });
+                    if (!conversation) {
+                        conversation = await Conversation.create({
+                            participants: [userId, targetUserId],
+                            match: activeMatch._id
+                        });
+                    }
+                }
 
                 const message = await Message.create({
                     conversation: conversation._id,
@@ -100,20 +122,41 @@ const chatSocket = (io) => {
         });
 
         // Call signaling
-        socket.on('call_user', ({ conversationId, targetUserId, roomId, callerName, callerPhoto, callType }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
-            if (targetSocketId) {
-                io.to(targetSocketId).emit('incoming_call', {
-                    conversationId,
-                    callerId: userId,
-                    callerName,
-                    callerPhoto,
-                    roomId,
-                    callType
+        socket.on('call_user', async ({ conversationId, targetUserId, roomId, callerName, callerPhoto, callType }) => {
+            try {
+                if (!targetUserId || !targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
+                    socket.emit('call_error', { message: 'Invalid call recipient' });
+                    return;
+                }
+
+                // Enforce Mutual Match Requirement for Calling
+                const activeMatch = await Match.findOne({
+                    users: { $all: [userId, targetUserId] },
+                    isActive: true
                 });
-                console.log(`📞 Socket: call_user from ${userId} to ${targetUserId} (room=${roomId})`);
-            } else {
-                socket.emit('call_error', { message: 'User is offline' });
+
+                if (!activeMatch) {
+                    socket.emit('call_error', { message: 'Calling is restricted to mutual matches only.' });
+                    return;
+                }
+
+                const targetSocketId = onlineUsers.get(targetUserId);
+                if (targetSocketId) {
+                    io.to(targetSocketId).emit('incoming_call', {
+                        conversationId,
+                        callerId: userId,
+                        callerName,
+                        callerPhoto,
+                        roomId,
+                        callType
+                    });
+                    console.log(`📞 Socket: call_user from ${userId} to ${targetUserId} (room=${roomId})`);
+                } else {
+                    socket.emit('call_error', { message: 'User is currently offline' });
+                }
+            } catch (err) {
+                socket.emit('call_error', { message: 'Failed to initiate call' });
+                console.error('[Socket call_user]', err);
             }
         });
 
