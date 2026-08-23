@@ -41,14 +41,40 @@ const requireAdmin = async (req, res, next) => {
     try {
         const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_ACCESS_SECRET;
         const decoded = jwt.verify(token, secret);
-        const admin = await Admin.findById(decoded.id);
-        if (!admin || !admin.isActive) {
-            return res.status(401).json({ success: false, message: 'Admin not found or inactive' });
+        
+        let admin = await Admin.findById(decoded.id);
+        if (admin && admin.isActive) {
+            req.admin = admin;
+            return next();
         }
-        req.admin = admin;
-        next();
+
+        // If not found in Admin collection, check User collection for Elite Agent / Staff
+        const agentUser = await User.findById(decoded.id);
+        if (agentUser && !agentUser.isDeleted && (agentUser.isEliteAgent || agentUser.isStaff || agentUser.role === 'staff')) {
+            req.admin = {
+                _id: agentUser._id,
+                name: agentUser.name,
+                email: agentUser.email,
+                role: 'agent',
+                isEliteAgent: true,
+                isStaff: agentUser.isStaff || false,
+                avatar: (agentUser.photos && agentUser.photos.length > 0) ? agentUser.photos[0].url : '',
+                phone: agentUser.phone,
+                wallet: agentUser.wallet || {},
+                payoutDetails: agentUser.payoutDetails || {},
+                permissions: {
+                    eliteAgent_Read: true,
+                    payout_Read: true,
+                    payout_Write: true
+                }
+            };
+            req.user = agentUser;
+            return next();
+        }
+
+        return res.status(401).json({ success: false, message: 'Admin or Agent account not found or inactive' });
     } catch (err) {
-        return res.status(401).json({ success: false, message: 'Admin token invalid or expired' });
+        return res.status(401).json({ success: false, message: 'Authorization token invalid or expired' });
     }
 };
 
