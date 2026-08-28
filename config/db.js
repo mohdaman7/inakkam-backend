@@ -5,8 +5,13 @@ const mongoose = require('mongoose');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-if (process.env.NODE_ENV !== 'production') {
-    dns.setServers(['8.8.8.8', '1.1.1.1']);
+const dnsServers = (process.env.MONGODB_DNS_SERVERS || '8.8.8.8,1.1.1.1')
+    .split(',')
+    .map((server) => server.trim())
+    .filter(Boolean);
+
+if (dnsServers.length > 0) {
+    dns.setServers(dnsServers);
 }
 
 const connectDB = async () => {

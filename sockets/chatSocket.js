@@ -52,11 +52,25 @@ const chatSocket = (io) => {
                     return;
                 }
 
-                // Enforce Mutual Match Requirement
-                const activeMatch = await Match.findOne({
+                // Enforce Mutual Match Requirement (with Agent auto-matching)
+                let activeMatch = await Match.findOne({
                     users: { $all: [userId, targetUserId] },
                     isActive: true
                 });
+
+                if (!activeMatch) {
+                    const [senderUser, targetUser] = await Promise.all([
+                        User.findById(userId).lean(),
+                        User.findById(targetUserId).lean()
+                    ]);
+                    const isSenderAgent = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff');
+                    const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff');
+
+                    if (isSenderAgent || isTargetAgent) {
+                        activeMatch = await Match.create({ users: [userId, targetUserId] });
+                        await User.updateMany({ _id: { $in: [userId, targetUserId] } }, { $inc: { matchesCount: 1 } });
+                    }
+                }
 
                 if (!activeMatch) {
                     socket.emit('message_error', { tempId, message: 'Messaging is restricted to mutual matches only.' });
@@ -129,11 +143,25 @@ const chatSocket = (io) => {
                     return;
                 }
 
-                // Enforce Mutual Match Requirement for Calling
-                const activeMatch = await Match.findOne({
+                // Enforce Mutual Match Requirement for Calling (with Agent auto-matching)
+                let activeMatch = await Match.findOne({
                     users: { $all: [userId, targetUserId] },
                     isActive: true
                 });
+
+                if (!activeMatch) {
+                    const [callerUser, targetUser] = await Promise.all([
+                        User.findById(userId).lean(),
+                        User.findById(targetUserId).lean()
+                    ]);
+                    const isCallerAgent = callerUser && (callerUser.isEliteAgent || callerUser.isStaff || callerUser.role === 'staff');
+                    const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff');
+
+                    if (isCallerAgent || isTargetAgent) {
+                        activeMatch = await Match.create({ users: [userId, targetUserId] });
+                        await User.updateMany({ _id: { $in: [userId, targetUserId] } }, { $inc: { matchesCount: 1 } });
+                    }
+                }
 
                 if (!activeMatch) {
                     socket.emit('call_error', { message: 'Calling is restricted to mutual matches only.' });

@@ -35,11 +35,11 @@ const recordSwipe = async (req, res, next) => {
         let matchData = null;
 
         if (action === 'right' || action === 'superlike') {
-            // Check if the other person already swiped right on us OR if the target is a fake/seed user (for instant matches during testing)
-            let theirSwipe = await Swipe.findOne({ swiper: swipedUserId, swiped: me._id, action: { $in: ['right', 'superlike'] } });
-            
-            if (!theirSwipe && targetUser.isFake) {
-                // Mock a right swipe back from the fake user so it matches instantly
+            const isMeAgent = me.isEliteAgent || me.isStaff || me.role === 'staff';
+            const isTargetAgent = targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff';
+
+            if (!theirSwipe && (targetUser.isFake || isMeAgent || isTargetAgent)) {
+                // Auto-create reciprocal swipe for agent or fake user so it matches instantly
                 theirSwipe = await Swipe.create({
                     swiper: swipedUserId,
                     swiped: me._id,

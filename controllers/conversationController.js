@@ -1,12 +1,31 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const Match = require('../models/Match');
+const User = require('../models/User');
 
 // @desc    Get all conversations for current user
 // @route   GET /api/conversations
 // @access  Private
 const getConversations = async (req, res, next) => {
     try {
+        // Find all active matches for user and ensure conversation records exist
+        const activeMatches = await Match.find({
+            users: req.user._id,
+            isActive: true
+        });
+
+        for (const m of activeMatches) {
+            const otherId = m.users.find(uId => uId.toString() !== req.user._id.toString());
+            if (!otherId) continue;
+            let conv = await Conversation.findOne({ participants: { $all: [req.user._id, otherId] } });
+            if (!conv) {
+                await Conversation.create({
+                    participants: [req.user._id, otherId],
+                    match: m._id
+                });
+            }
+        }
+
         const conversations = await Conversation.find({
             participants: req.user._id,
         })
@@ -62,11 +81,25 @@ const findOrCreateConversation = async (paramId, currentUserId) => {
     }
 
     if (targetUserId && targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
-        // Enforce Mutual Match Check
-        const activeMatch = await Match.findOne({
+        let activeMatch = await Match.findOne({
             users: { $all: [currentUserId, targetUserId] },
             isActive: true
         });
+
+        // Check if either user is an Agent / Staff account
+        if (!activeMatch) {
+            const [me, target] = await Promise.all([
+                User.findById(currentUserId).lean(),
+                User.findById(targetUserId).lean()
+            ]);
+            const isMeAgent = me && (me.isEliteAgent || me.isStaff || me.role === 'staff');
+            const isTargetAgent = target && (target.isEliteAgent || target.isStaff || target.role === 'staff');
+
+            if (isMeAgent || isTargetAgent) {
+                activeMatch = await Match.create({ users: [currentUserId, targetUserId] });
+                await User.updateMany({ _id: { $in: [currentUserId, targetUserId] } }, { $inc: { matchesCount: 1 } });
+            }
+        }
 
         if (!activeMatch) {
             return null; // Not mutually matched

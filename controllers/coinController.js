@@ -65,6 +65,7 @@ const purchaseCoins = async (req, res, next) => {
 };
 
 // @desc    Deduct message coin (30 coins user cost, 6 coins / ₹2 staff payout)
+// @desc    Deduct message coin (30 coins user cost, 6 coins / ₹2 staff payout)
 // @route   POST /api/coins/deduct-message
 const deductMessageCoin = async (req, res, next) => {
     try {
@@ -74,8 +75,28 @@ const deductMessageCoin = async (req, res, next) => {
 
         const isSenderStaff = sender.isStaff || sender.isEliteAgent || sender.role === 'staff';
         if (isSenderStaff) {
-            // Staff members pay 0 coins for messages
-            return res.json({ success: true, isStaff: true, deducted: 0, balance: sender.wallet?.balance || 0 });
+            // Staff/Agent members pay 0 coins for messages
+            // Credit the agent if messaging/replying to a regular customer
+            if (recipientId) {
+                const recipient = await User.findById(recipientId);
+                if (recipient && !recipient.isStaff && !recipient.isEliteAgent && recipient.role !== 'staff') {
+                    const STAFF_EARNING_COINS = 6; // 6 coins = ₹2
+                    if (!sender.wallet) sender.wallet = {};
+                    sender.wallet.earnedCoins = (sender.wallet.earnedCoins || 0) + STAFF_EARNING_COINS;
+                    sender.wallet.todayCoins = (sender.wallet.todayCoins || 0) + STAFF_EARNING_COINS;
+                    sender.wallet.weeklyCoins = (sender.wallet.weeklyCoins || 0) + STAFF_EARNING_COINS;
+                    sender.wallet.monthlyCoins = (sender.wallet.monthlyCoins || 0) + STAFF_EARNING_COINS;
+                    sender.wallet.lifetimeEarnings = (sender.wallet.lifetimeEarnings || 0) + 2; // ₹2
+                    await sender.save();
+                }
+            }
+            return res.json({
+                success: true,
+                isStaff: true,
+                deducted: 0,
+                balance: sender.wallet?.balance || 0,
+                earnedCoins: sender.wallet?.earnedCoins || 0
+            });
         }
 
         const currentBalance = sender.wallet?.balance || 0;
@@ -92,10 +113,11 @@ const deductMessageCoin = async (req, res, next) => {
         }
 
         // Deduct 30 coins from customer
-        sender.wallet.balance = currentBalance - MESSAGE_COST;
+        if (!sender.wallet) sender.wallet = {};
+        sender.wallet.balance = Math.max(0, currentBalance - MESSAGE_COST);
         await sender.save();
 
-        // Credit recipient if recipient is staff
+        // Credit recipient if recipient is staff/agent
         if (recipientId) {
             const recipient = await User.findById(recipientId);
             if (recipient && (recipient.isStaff || recipient.isEliteAgent || recipient.role === 'staff')) {
@@ -128,12 +150,35 @@ const deductCallCoin = async (req, res, next) => {
         const caller = await User.findById(req.user._id);
         if (!caller) return res.status(404).json({ success: false, message: 'Caller not found' });
 
+        const payoutCoinsPerMin = callType === 'audio' ? 15 : 51;
+        const payoutCoinsForPeriod = Math.round((payoutCoinsPerMin / 60) * Number(seconds) * 10) / 10;
+        const rupeeEarnings = Math.round((payoutCoinsForPeriod / 3) * 100) / 100; // ₹1 = 3 coins
+
         const isCallerStaff = caller.isStaff || caller.isEliteAgent || caller.role === 'staff';
         if (isCallerStaff) {
-            return res.json({ success: true, isStaff: true, deducted: 0 });
+            // Staff/Agent caller pays 0 coins
+            // If recipient is regular user, credit caller agent for call time
+            if (targetUserId) {
+                const recipient = await User.findById(targetUserId);
+                if (recipient && !recipient.isStaff && !recipient.isEliteAgent && recipient.role !== 'staff') {
+                    if (!caller.wallet) caller.wallet = {};
+                    caller.wallet.earnedCoins = (caller.wallet.earnedCoins || 0) + payoutCoinsForPeriod;
+                    caller.wallet.todayCoins = (caller.wallet.todayCoins || 0) + payoutCoinsForPeriod;
+                    caller.wallet.weeklyCoins = (caller.wallet.weeklyCoins || 0) + payoutCoinsForPeriod;
+                    caller.wallet.monthlyCoins = (caller.wallet.monthlyCoins || 0) + payoutCoinsForPeriod;
+                    caller.wallet.lifetimeEarnings = (caller.wallet.lifetimeEarnings || 0) + rupeeEarnings;
+                    await caller.save();
+                }
+            }
+            return res.json({
+                success: true,
+                isStaff: true,
+                deducted: 0,
+                earnedCoins: caller.wallet?.earnedCoins || 0
+            });
         }
 
-        // Cost rates per minute
+        // Cost rates per minute for regular users
         // Audio: 150 coins/min (50 coins per 20 seconds)
         // Video: 419.4 coins/min (139.8 coins per 20 seconds)
         const costPerMin = callType === 'audio' ? 150 : 419.4;
@@ -151,19 +196,14 @@ const deductCallCoin = async (req, res, next) => {
         }
 
         // Deduct from caller
+        if (!caller.wallet) caller.wallet = {};
         caller.wallet.balance = Math.max(0, currentBalance - costForPeriod);
         await caller.save();
 
         // Credit staff recipient
-        // Audio payout: 15 coins/min (5 coins per 20s = ₹1.67)
-        // Video payout: 51 coins/min (17 coins per 20s = ₹5.67)
         if (targetUserId) {
             const recipient = await User.findById(targetUserId);
             if (recipient && (recipient.isStaff || recipient.isEliteAgent || recipient.role === 'staff')) {
-                const payoutCoinsPerMin = callType === 'audio' ? 15 : 51;
-                const payoutCoinsForPeriod = Math.round((payoutCoinsPerMin / 60) * Number(seconds) * 10) / 10;
-                const rupeeEarnings = Math.round((payoutCoinsForPeriod / 3) * 100) / 100; // ₹1 = 3 coins
-
                 if (!recipient.wallet) recipient.wallet = {};
                 recipient.wallet.earnedCoins = (recipient.wallet.earnedCoins || 0) + payoutCoinsForPeriod;
                 recipient.wallet.todayCoins = (recipient.wallet.todayCoins || 0) + payoutCoinsForPeriod;

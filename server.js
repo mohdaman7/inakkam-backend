@@ -14,8 +14,13 @@ if (dotenvResult.error) {
     console.log(`   MONGODB_URI present: ${!!process.env.MONGODB_URI}`);
 }
 
-if (process.env.NODE_ENV !== 'production') {
-    dns.setServers(['8.8.8.8', '1.1.1.1']);
+const dnsServers = (process.env.MONGODB_DNS_SERVERS || '8.8.8.8,1.1.1.1')
+    .split(',')
+    .map((server) => server.trim())
+    .filter(Boolean);
+
+if (dnsServers.length > 0) {
+    dns.setServers(dnsServers);
 }
 const crypto = require('crypto');
 global.crypto = crypto; // Make crypto globally available for MongoDB
