@@ -213,10 +213,19 @@ const chatSocket = (io) => {
         });
 
         // WebRTC Direct P2P Fallback Signaling
+        socket.on('webrtc_ready', ({ targetUserId }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_ready', { senderId: userId });
+                console.log(`📞 Socket: webrtc_ready from ${userId} to ${targetUserId}`);
+            }
+        });
+
         socket.on('webrtc_offer', ({ targetUserId, offer }) => {
             const targetSocketId = onlineUsers.get(targetUserId);
             if (targetSocketId) {
                 io.to(targetSocketId).emit('webrtc_offer', { senderId: userId, offer });
+                console.log(`📞 Socket: webrtc_offer from ${userId} to ${targetUserId}`);
             }
         });
 
@@ -224,6 +233,7 @@ const chatSocket = (io) => {
             const targetSocketId = onlineUsers.get(targetUserId);
             if (targetSocketId) {
                 io.to(targetSocketId).emit('webrtc_answer', { senderId: userId, answer });
+                console.log(`📞 Socket: webrtc_answer from ${userId} to ${targetUserId}`);
             }
         });
 
