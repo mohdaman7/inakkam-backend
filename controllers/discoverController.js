@@ -79,7 +79,8 @@ const getDiscover = async (req, res, next) => {
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         let users = await User.find(filter)
-            .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline')
+            .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline isEliteAgent isStaff role gender')
+            .sort({ isEliteAgent: -1, isStaff: -1, isOnline: -1, lastActive: -1 })
             .skip(skip)
             .limit(parseInt(limit))
             .lean();
@@ -91,7 +92,8 @@ const getDiscover = async (req, res, next) => {
                 isDeleted: { $ne: true },
             };
             const fallbackUsers = await User.find(fallbackFilter)
-                .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline')
+                .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline isEliteAgent isStaff role gender')
+                .sort({ isEliteAgent: -1, isStaff: -1, isOnline: -1, lastActive: -1 })
                 .limit(parseInt(limit))
                 .lean();
 

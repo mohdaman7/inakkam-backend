@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions } = require('../controllers/userController');
+const { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents } = require('../controllers/userController');
 const { protect } = require('../middlewares/auth');
 const { uploadPhoto: multerPhoto } = require('../config/cloudinary');
 
 router.use(protect);
 
 router.get('/me', getMe);
+router.get('/agents', getAgents);
 router.get('/onboarding-options', getOnboardingOptions);
 router.put('/me', updateMe);
 router.put('/me/onboarding', completeOnboarding);

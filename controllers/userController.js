@@ -171,4 +171,37 @@ const getOnboardingOptions = async (req, res, next) => {
     }
 };
 
-module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions };
+// @desc    Get active agents / host profiles
+// @route   GET /api/users/agents
+// @access  Private
+const getAgents = async (req, res, next) => {
+    try {
+        let agents = await User.find({
+            _id: { $ne: req.user._id },
+            $or: [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }],
+            isDeleted: { $ne: true }
+        })
+        .select('name age bio work education photos interests prompts zodiac height verified badges location lastActive isOnline isEliteAgent isStaff role gender wallet')
+        .sort({ isOnline: -1, lastActive: -1 })
+        .limit(20)
+        .lean();
+
+        // If no explicit agents exist yet in DB, fallback to top active users to ensure UI is rich
+        if (!agents || agents.length === 0) {
+            agents = await User.find({
+                _id: { $ne: req.user._id },
+                isDeleted: { $ne: true }
+            })
+            .select('name age bio work education photos interests prompts zodiac height verified badges location lastActive isOnline isEliteAgent isStaff role gender wallet')
+            .sort({ isOnline: -1, lastActive: -1 })
+            .limit(10)
+            .lean();
+        }
+
+        return res.json({ success: true, agents });
+    } catch (err) {
+        next(err);
+    }
+};
+
+module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents };

@@ -212,6 +212,28 @@ const chatSocket = (io) => {
             }
         });
 
+        // WebRTC Direct P2P Fallback Signaling
+        socket.on('webrtc_offer', ({ targetUserId, offer }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_offer', { senderId: userId, offer });
+            }
+        });
+
+        socket.on('webrtc_answer', ({ targetUserId, answer }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_answer', { senderId: userId, answer });
+            }
+        });
+
+        socket.on('webrtc_ice_candidate', ({ targetUserId, candidate }) => {
+            const targetSocketId = onlineUsers.get(targetUserId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_ice_candidate', { senderId: userId, candidate });
+            }
+        });
+
         // Disconnect / offline
         socket.on('disconnect', () => {
             onlineUsers.delete(userId);
