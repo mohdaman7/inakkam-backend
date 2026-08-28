@@ -3,7 +3,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: isDev ? 1000 : 100,
+    max: isDev ? 1000 : 500, // Increased from 100 — 100 was too restrictive for normal app usage
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please try again later.' },
@@ -12,7 +12,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: isDev ? 100 : 10,
+    max: isDev ? 100 : 30, // Increased from 10 — allows retries without locking out users
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many login attempts, please try again in 15 minutes.' },
