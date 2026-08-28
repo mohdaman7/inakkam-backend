@@ -15,13 +15,14 @@ const chatSocket = (io) => {
         }
 
         // Register user as online
-        onlineUsers.set(userId, socket.id);
+        const uidStr = String(userId);
+        onlineUsers.set(uidStr, socket.id);
         User.findByIdAndUpdate(userId, { isOnline: true, lastActive: Date.now() })
             .exec()
             .catch((err) => console.error('[Socket connect] Failed to update user status', err));
-        io.emit('user_status', { userId, isOnline: true });
+        io.emit('user_status', { userId: uidStr, isOnline: true });
 
-        console.log(`🟢 Socket connected: user=${userId} socket=${socket.id}`);
+        console.log(`🟢 Socket connected: user=${uidStr} socket=${socket.id}`);
 
         // Join a conversation room
         socket.on('join_room', (conversationId) => {
@@ -168,11 +169,11 @@ const chatSocket = (io) => {
                     return;
                 }
 
-                const targetSocketId = onlineUsers.get(targetUserId);
+                const targetSocketId = onlineUsers.get(String(targetUserId));
                 if (targetSocketId) {
                     io.to(targetSocketId).emit('incoming_call', {
                         conversationId,
-                        callerId: userId,
+                        callerId: String(userId),
                         callerName,
                         callerPhoto,
                         roomId,
@@ -189,23 +190,23 @@ const chatSocket = (io) => {
         });
 
         socket.on('accept_call', ({ conversationId, callerId }) => {
-            const callerSocketId = onlineUsers.get(callerId);
+            const callerSocketId = onlineUsers.get(String(callerId));
             if (callerSocketId) {
-                io.to(callerSocketId).emit('call_accepted', { conversationId, receiverId: userId });
+                io.to(callerSocketId).emit('call_accepted', { conversationId, receiverId: String(userId) });
                 console.log(`📞 Socket: accept_call from ${userId} to caller ${callerId}`);
             }
         });
 
         socket.on('reject_call', ({ conversationId, callerId }) => {
-            const callerSocketId = onlineUsers.get(callerId);
+            const callerSocketId = onlineUsers.get(String(callerId));
             if (callerSocketId) {
-                io.to(callerSocketId).emit('call_rejected', { conversationId, receiverId: userId });
+                io.to(callerSocketId).emit('call_rejected', { conversationId, receiverId: String(userId) });
                 console.log(`📞 Socket: reject_call from ${userId} to caller ${callerId}`);
             }
         });
 
         socket.on('end_call', ({ conversationId, targetUserId }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
+            const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
                 io.to(targetSocketId).emit('call_ended', { conversationId });
                 console.log(`📞 Socket: end_call from ${userId} to ${targetUserId}`);
@@ -214,33 +215,33 @@ const chatSocket = (io) => {
 
         // WebRTC Direct P2P Fallback Signaling
         socket.on('webrtc_ready', ({ targetUserId }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
+            const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_ready', { senderId: userId });
+                io.to(targetSocketId).emit('webrtc_ready', { senderId: String(userId) });
                 console.log(`📞 Socket: webrtc_ready from ${userId} to ${targetUserId}`);
             }
         });
 
         socket.on('webrtc_offer', ({ targetUserId, offer }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
+            const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_offer', { senderId: userId, offer });
+                io.to(targetSocketId).emit('webrtc_offer', { senderId: String(userId), offer });
                 console.log(`📞 Socket: webrtc_offer from ${userId} to ${targetUserId}`);
             }
         });
 
         socket.on('webrtc_answer', ({ targetUserId, answer }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
+            const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_answer', { senderId: userId, answer });
+                io.to(targetSocketId).emit('webrtc_answer', { senderId: String(userId), answer });
                 console.log(`📞 Socket: webrtc_answer from ${userId} to ${targetUserId}`);
             }
         });
 
         socket.on('webrtc_ice_candidate', ({ targetUserId, candidate }) => {
-            const targetSocketId = onlineUsers.get(targetUserId);
+            const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_ice_candidate', { senderId: userId, candidate });
+                io.to(targetSocketId).emit('webrtc_ice_candidate', { senderId: String(userId), candidate });
             }
         });
 
