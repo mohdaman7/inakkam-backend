@@ -245,6 +245,14 @@ const chatSocket = (io) => {
             }
         });
 
+        // In-call text chat relay
+        socket.on('webrtc_chat', ({ targetUserId, message }) => {
+            const targetSocketId = onlineUsers.get(String(targetUserId));
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_chat', { senderId: String(userId), message });
+            }
+        });
+
         // Disconnect / offline
         socket.on('disconnect', () => {
             onlineUsers.delete(userId);
