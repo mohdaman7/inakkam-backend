@@ -214,6 +214,14 @@ const chatSocket = (io) => {
         });
 
         // WebRTC Direct P2P Fallback Signaling
+        socket.on('webrtc_caller_ready', ({ targetUserId }) => {
+            const targetSocketId = onlineUsers.get(String(targetUserId));
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc_caller_ready', { senderId: String(userId) });
+                console.log(`📞 Socket: webrtc_caller_ready from ${userId} to ${targetUserId}`);
+            }
+        });
+
         socket.on('webrtc_ready', ({ targetUserId }) => {
             const targetSocketId = onlineUsers.get(String(targetUserId));
             if (targetSocketId) {
