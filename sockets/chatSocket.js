@@ -32,7 +32,60 @@ const chatSocket = (io) => {
                 socket.join(String(conversationId));
             }
         });
+// ─────────────────────────────────────────────
+// EnableX room replacement / recovery
+// ─────────────────────────────────────────────
 
+socket.on(
+    'enablex_room_recreated',
+    ({
+        targetUserId,
+        conversationId,
+        roomId,
+        callType
+    }) => {
+
+        const targetUidStr = String(targetUserId);
+
+        if (
+            !targetUidStr ||
+            !roomId
+        ) {
+            console.error(
+                '[Socket] Invalid enablex_room_recreated payload'
+            );
+
+            return;
+        }
+
+        const payload = {
+            conversationId,
+            roomId,
+            callType,
+            recreatedBy: String(userId)
+        };
+
+        // Tell the other participant to use the new room.
+        io.to(
+            `user_${targetUidStr}`
+        ).emit(
+            'enablex_room_recreated',
+            payload
+        );
+
+        console.log(
+            `🔄 [EnableX] Room recreated: ${roomId}`
+        );
+
+        console.log(
+            `   From: ${userId}`
+        );
+
+        console.log(
+            `   To: ${targetUidStr}`
+        );
+    }
+);
         // Send message via socket
         socket.on('send_message', async ({ conversationId, text, tempId }) => {
             try {
