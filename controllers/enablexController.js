@@ -111,7 +111,15 @@ const createRoom = async (req, res, next) => {
                 // Ad-hoc rooms can be recreated when necessary.
                 adhoc: true,
 
-                duration: 60
+                duration: 60,
+
+                participants: 6,
+
+                quality: 'HD',
+
+                auto_recording: false,
+
+                screen_share: true
             },
 
             sip: false
