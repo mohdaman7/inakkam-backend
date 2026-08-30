@@ -103,7 +103,7 @@ const createRoom = async (req, res, next) => {
                 description:
                     'Inakkam real-time call session',
 
-                mode: 'group',
+                mode: 'p2p',
 
                 scheduled: false,
 
@@ -113,7 +113,7 @@ const createRoom = async (req, res, next) => {
 
                 duration: 60,
 
-                participants: 6,
+                participants: 2,
 
                 quality: 'HD',
 
