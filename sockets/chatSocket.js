@@ -14,9 +14,12 @@ const chatSocket = (io) => {
             return;
         }
 
-        // Register user as online
+        // Register user as online & join individual user room
         const uidStr = String(userId);
         onlineUsers.set(uidStr, socket.id);
+        socket.join(uidStr);
+        socket.join(`user_${uidStr}`);
+
         User.findByIdAndUpdate(userId, { isOnline: true, lastActive: Date.now() })
             .exec()
             .catch((err) => console.error('[Socket connect] Failed to update user status', err));
@@ -26,7 +29,9 @@ const chatSocket = (io) => {
 
         // Join a conversation room
         socket.on('join_room', (conversationId) => {
-            socket.join(conversationId);
+            if (conversationId) {
+                socket.join(String(conversationId));
+            }
         });
 
         // Send message via socket
@@ -136,10 +141,11 @@ const chatSocket = (io) => {
             }
         });
 
-        // Call signaling
+        // ─── Call Signaling ─────────────────────────────────────
         socket.on('call_user', async ({ conversationId, targetUserId, roomId, callerName, callerPhoto, callType }) => {
             try {
-                if (!targetUserId || !targetUserId.match(/^[0-9a-fA-F]{24}$/)) {
+                const targetUidStr = String(targetUserId);
+                if (!targetUidStr || !targetUidStr.match(/^[0-9a-fA-F]{24}$/)) {
                     socket.emit('call_error', { message: 'Invalid call recipient' });
                     return;
                 }
@@ -169,20 +175,22 @@ const chatSocket = (io) => {
                     return;
                 }
 
-                const targetSocketId = onlineUsers.get(String(targetUserId));
+                const callPayload = {
+                    conversationId,
+                    callerId: String(userId),
+                    callerName,
+                    callerPhoto,
+                    roomId,
+                    callType
+                };
+
+                // Emit to both user room and direct socket
+                io.to(targetUidStr).to(`user_${targetUidStr}`).emit('incoming_call', callPayload);
+                const targetSocketId = onlineUsers.get(targetUidStr);
                 if (targetSocketId) {
-                    io.to(targetSocketId).emit('incoming_call', {
-                        conversationId,
-                        callerId: String(userId),
-                        callerName,
-                        callerPhoto,
-                        roomId,
-                        callType
-                    });
-                    console.log(`📞 Socket: call_user from ${userId} to ${targetUserId} (room=${roomId})`);
-                } else {
-                    socket.emit('call_error', { message: 'User is currently offline' });
+                    io.to(targetSocketId).emit('incoming_call', callPayload);
                 }
+                console.log(`📞 Socket: call_user from ${userId} to ${targetUidStr} (room=${roomId})`);
             } catch (err) {
                 socket.emit('call_error', { message: 'Failed to initiate call' });
                 console.error('[Socket call_user]', err);
@@ -190,74 +198,101 @@ const chatSocket = (io) => {
         });
 
         socket.on('accept_call', ({ conversationId, callerId }) => {
-            const callerSocketId = onlineUsers.get(String(callerId));
+            const callerUidStr = String(callerId);
+            const acceptPayload = { conversationId, receiverId: String(userId) };
+            io.to(callerUidStr).to(`user_${callerUidStr}`).emit('call_accepted', acceptPayload);
+            const callerSocketId = onlineUsers.get(callerUidStr);
             if (callerSocketId) {
-                io.to(callerSocketId).emit('call_accepted', { conversationId, receiverId: String(userId) });
-                console.log(`📞 Socket: accept_call from ${userId} to caller ${callerId}`);
+                io.to(callerSocketId).emit('call_accepted', acceptPayload);
             }
+            console.log(`📞 Socket: accept_call from ${userId} to caller ${callerUidStr}`);
         });
 
         socket.on('reject_call', ({ conversationId, callerId }) => {
-            const callerSocketId = onlineUsers.get(String(callerId));
+            const callerUidStr = String(callerId);
+            const rejectPayload = { conversationId, receiverId: String(userId) };
+            io.to(callerUidStr).to(`user_${callerUidStr}`).emit('call_rejected', rejectPayload);
+            const callerSocketId = onlineUsers.get(callerUidStr);
             if (callerSocketId) {
-                io.to(callerSocketId).emit('call_rejected', { conversationId, receiverId: String(userId) });
-                console.log(`📞 Socket: reject_call from ${userId} to caller ${callerId}`);
+                io.to(callerSocketId).emit('call_rejected', rejectPayload);
             }
+            console.log(`📞 Socket: reject_call from ${userId} to caller ${callerUidStr}`);
         });
 
         socket.on('end_call', ({ conversationId, targetUserId }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const endPayload = { conversationId };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('call_ended', endPayload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('call_ended', { conversationId });
-                console.log(`📞 Socket: end_call from ${userId} to ${targetUserId}`);
+                io.to(targetSocketId).emit('call_ended', endPayload);
             }
+            console.log(`📞 Socket: end_call from ${userId} to ${targetUidStr}`);
         });
 
-        // WebRTC Direct P2P Fallback Signaling
+        // ─── WebRTC Direct P2P Signaling ────────────────────────
         socket.on('webrtc_caller_ready', ({ targetUserId }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId) };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_caller_ready', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_caller_ready', { senderId: String(userId) });
-                console.log(`📞 Socket: webrtc_caller_ready from ${userId} to ${targetUserId}`);
+                io.to(targetSocketId).emit('webrtc_caller_ready', payload);
             }
+            console.log(`📞 Socket: webrtc_caller_ready from ${userId} to ${targetUidStr}`);
         });
 
         socket.on('webrtc_ready', ({ targetUserId }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId) };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_ready', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_ready', { senderId: String(userId) });
-                console.log(`📞 Socket: webrtc_ready from ${userId} to ${targetUserId}`);
+                io.to(targetSocketId).emit('webrtc_ready', payload);
             }
+            console.log(`📞 Socket: webrtc_ready from ${userId} to ${targetUidStr}`);
         });
 
         socket.on('webrtc_offer', ({ targetUserId, offer }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId), offer };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_offer', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_offer', { senderId: String(userId), offer });
-                console.log(`📞 Socket: webrtc_offer from ${userId} to ${targetUserId}`);
+                io.to(targetSocketId).emit('webrtc_offer', payload);
             }
+            console.log(`📞 Socket: webrtc_offer from ${userId} to ${targetUidStr}`);
         });
 
         socket.on('webrtc_answer', ({ targetUserId, answer }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId), answer };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_answer', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_answer', { senderId: String(userId), answer });
-                console.log(`📞 Socket: webrtc_answer from ${userId} to ${targetUserId}`);
+                io.to(targetSocketId).emit('webrtc_answer', payload);
             }
+            console.log(`📞 Socket: webrtc_answer from ${userId} to ${targetUidStr}`);
         });
 
         socket.on('webrtc_ice_candidate', ({ targetUserId, candidate }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId), candidate };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_ice_candidate', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_ice_candidate', { senderId: String(userId), candidate });
+                io.to(targetSocketId).emit('webrtc_ice_candidate', payload);
             }
         });
 
         // In-call text chat relay
         socket.on('webrtc_chat', ({ targetUserId, message }) => {
-            const targetSocketId = onlineUsers.get(String(targetUserId));
+            const targetUidStr = String(targetUserId);
+            const payload = { senderId: String(userId), message };
+            io.to(targetUidStr).to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
+            const targetSocketId = onlineUsers.get(targetUidStr);
             if (targetSocketId) {
-                io.to(targetSocketId).emit('webrtc_chat', { senderId: String(userId), message });
+                io.to(targetSocketId).emit('webrtc_chat', payload);
             }
         });
 
@@ -267,7 +302,7 @@ const chatSocket = (io) => {
             User.findByIdAndUpdate(userId, { isOnline: false, lastActive: Date.now() })
                 .exec()
                 .catch((err) => console.error('[Socket disconnect] Failed to update user status', err));
-            io.emit('user_status', { userId, isOnline: false });
+            io.emit('user_status', { userId: uidStr, isOnline: false });
             console.log(`🔴 Socket disconnected: user=${userId}`);
         });
     });
