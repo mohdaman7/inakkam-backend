@@ -16,15 +16,22 @@ const createRoom = async (req, res, next) => {
         const authHeader = getAuthHeader();
 
         if (!authHeader) {
-            console.warn('⚠️ EnableX credentials not configured. Returning mock Room ID.');
-            return res.status(200).json({
-                success: true,
-                message: 'Mock room created (No Credentials)',
-                room: {
-                    room_id: `mock_room_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-                }
-            });
-        }
+    console.error('[EnableX] Credentials are not configured');
+
+    return res.status(500).json({
+        success: false,
+        message: 'EnableX credentials are not configured'
+    });
+}
+
+if (roomId.startsWith('mock_')) {
+    console.error('[EnableX] Mock room cannot be used for video calls');
+
+    return res.status(400).json({
+        success: false,
+        message: 'Invalid EnableX room. Real EnableX room required.'
+    });
+}
 
         const roomBody = {
             name: name || `Inakkam Call ${Date.now()}`,
@@ -94,7 +101,9 @@ const getToken = async (req, res, next) => {
             name: req.user.name || 'Inakkam User',
             role: role === 'moderator' ? 'moderator' : 'participant',
             user_ref: req.user._id.toString(),
-            data: { userId: req.user._id.toString() }
+data: JSON.stringify({
+    userId: req.user._id.toString()
+})
         };
 
         console.log(`[EnableX v2 Get Token Request] roomId=${roomId}, role=${tokenBody.role}`);
