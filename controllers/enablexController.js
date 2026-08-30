@@ -15,6 +15,54 @@ const getAuthHeader = () => {
     ).toString('base64')}`;
 };
 
+// ============================================================
+// Small in-memory circuit breaker.
+//
+// EnableX starts returning HTTP 429 ("Too Many Requests") when
+// the app id/key exceeds its plan's rate limit. Once that
+// happens, immediately retrying create-room/get-token just
+// generates more 429s and digs the rate-limit window deeper
+// (this is what was happening: every failed call retried token
+// creation, which kept re-triggering 429s).
+//
+// This breaker remembers the last time we got a 429 from
+// EnableX and, for a short cooldown window, short-circuits new
+// requests locally instead of hitting EnableX again. This is a
+// simple in-process safeguard — for multi-instance deployments,
+// back this with Redis instead of a module-level variable.
+// ============================================================
+const RATE_LIMIT_COOLDOWN_MS = 15 * 1000; // 15s local cooldown after a 429
+let rateLimitedUntil = 0;
+
+const isInCooldown = () => Date.now() < rateLimitedUntil;
+
+const startCooldown = (retryAfterHeader) => {
+    const retryAfterMs = retryAfterHeader
+        ? Number(retryAfterHeader) * 1000
+        : null;
+
+    rateLimitedUntil = Date.now() + (
+        retryAfterMs && !Number.isNaN(retryAfterMs)
+            ? retryAfterMs
+            : RATE_LIMIT_COOLDOWN_MS
+    );
+};
+
+const rateLimitedResponse = (res, retryAfterHeader) => {
+    const retryAfterSeconds = retryAfterHeader
+        ? Number(retryAfterHeader)
+        : Math.ceil(RATE_LIMIT_COOLDOWN_MS / 1000);
+
+    res.set('Retry-After', String(retryAfterSeconds));
+
+    return res.status(429).json({
+        success: false,
+        rateLimited: true,
+        message:
+            'Video service is temporarily rate-limited. Please wait a moment and try again.',
+        retryAfterSeconds
+    });
+};
 
 // ============================================================
 // CREATE ENABLEX ROOM
@@ -22,6 +70,13 @@ const getAuthHeader = () => {
 // ============================================================
 const createRoom = async (req, res, next) => {
     try {
+        if (isInCooldown()) {
+            console.warn(
+                '[EnableX] create-room short-circuited (local rate-limit cooldown active)'
+            );
+            return rateLimitedResponse(res);
+        }
+
         const { name } = req.body;
 
         const authHeader = getAuthHeader();
@@ -80,6 +135,26 @@ const createRoom = async (req, res, next) => {
                 body: JSON.stringify(roomBody)
             }
         );
+
+        // --------------------------------------------------
+        // Handle EnableX rate limiting explicitly.
+        // A 429 has no JSON body worth parsing as EnableX room
+        // data, and repeatedly retrying it just makes things
+        // worse, so we short-circuit future requests locally
+        // for a short cooldown window.
+        // --------------------------------------------------
+        if (response.status === 429) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+
+            console.error(
+                '[EnableX] ❌ create-room RATE LIMITED (429). Retry-After:',
+                retryAfterHeader
+            );
+
+            startCooldown(retryAfterHeader);
+
+            return rateLimitedResponse(res, retryAfterHeader);
+        }
 
         const data = await response.json();
 
@@ -175,6 +250,13 @@ const createRoom = async (req, res, next) => {
 // ============================================================
 const getToken = async (req, res, next) => {
     try {
+        if (isInCooldown()) {
+            console.warn(
+                '[EnableX] get-token short-circuited (local rate-limit cooldown active)'
+            );
+            return rateLimitedResponse(res);
+        }
+
         const {
             roomId,
             role
@@ -256,6 +338,23 @@ const getToken = async (req, res, next) => {
                 body: JSON.stringify(tokenBody)
             }
         );
+
+        // --------------------------------------------------
+        // Handle EnableX rate limiting explicitly (see
+        // createRoom above for why this matters).
+        // --------------------------------------------------
+        if (response.status === 429) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+
+            console.error(
+                '[EnableX] ❌ get-token RATE LIMITED (429). Retry-After:',
+                retryAfterHeader
+            );
+
+            startCooldown(retryAfterHeader);
+
+            return rateLimitedResponse(res, retryAfterHeader);
+        }
 
         const data = await response.json();
 
