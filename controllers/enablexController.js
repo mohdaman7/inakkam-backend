@@ -7,7 +7,7 @@ const getAuthHeader = () => {
     return `Basic ${Buffer.from(`${appId}:${appKey}`).toString('base64')}`;
 };
 
-// @desc    Create an EnableX video room (p2p mode for 1-on-1 calls)
+// @desc    Create an EnableX video room (v2 API)
 // @route   POST /api/enablex/create-room
 // @access  Private
 const createRoom = async (req, res, next) => {
@@ -31,25 +31,17 @@ const createRoom = async (req, res, next) => {
             owner_ref: req.user._id.toString(),
             settings: {
                 description: 'Inakkam real-time call session',
-                // 'p2p' mode is for 1-on-1 calls — works on trial accounts
-                // 'group' mode requires special account configuration
-                mode: 'p2p',
+                mode: 'group',
                 scheduled: false,
-                duration: 60,
-                moderators: '1',
-                participants: '2',
-                billing_code: 'inakkam',
-                media: {
-                    audio_muted: false,
-                    video_muted: false
-                }
+                adhoc: true,
+                duration: 60
             },
             sip: false
         };
 
-        console.log('[EnableX Create Room Request]', JSON.stringify(roomBody));
+        console.log('[EnableX v2 Create Room Request]', JSON.stringify(roomBody));
 
-        const response = await fetch('https://api.enablex.io/video/v1/rooms', {
+        const response = await fetch('https://api.enablex.io/video/v2/rooms', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -59,7 +51,7 @@ const createRoom = async (req, res, next) => {
         });
 
         const data = await response.json();
-        console.log('[EnableX Create Room Response]', JSON.stringify(data));
+        console.log('[EnableX v2 Create Room Response]', JSON.stringify(data));
 
         if (!response.ok || data.result !== 0) {
             console.error('[EnableX Create Room Error]', data);
@@ -77,7 +69,7 @@ const createRoom = async (req, res, next) => {
     }
 };
 
-// @desc    Generate EnableX participant/moderator token for a room
+// @desc    Generate EnableX participant/moderator token for a room (v2 API)
 // @route   POST /api/enablex/get-token
 // @access  Private
 const getToken = async (req, res, next) => {
@@ -100,16 +92,14 @@ const getToken = async (req, res, next) => {
 
         const tokenBody = {
             name: req.user.name || 'Inakkam User',
-            // 'moderator' = call initiator (can record, mute others)
-            // 'participant' = call receiver
             role: role === 'moderator' ? 'moderator' : 'participant',
             user_ref: req.user._id.toString(),
-            data: JSON.stringify({ userId: req.user._id.toString() })
+            data: { userId: req.user._id.toString() }
         };
 
-        console.log(`[EnableX Get Token Request] roomId=${roomId}, role=${tokenBody.role}`);
+        console.log(`[EnableX v2 Get Token Request] roomId=${roomId}, role=${tokenBody.role}`);
 
-        const response = await fetch(`https://api.enablex.io/video/v1/rooms/${roomId}/tokens`, {
+        const response = await fetch(`https://api.enablex.io/video/v2/rooms/${roomId}/tokens`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -119,7 +109,7 @@ const getToken = async (req, res, next) => {
         });
 
         const data = await response.json();
-        console.log('[EnableX Get Token Response]', JSON.stringify(data));
+        console.log('[EnableX v2 Get Token Response]', JSON.stringify(data));
 
         if (!response.ok || data.result !== 0) {
             console.error('[EnableX Get Token Error]', data);
@@ -130,7 +120,6 @@ const getToken = async (req, res, next) => {
             });
         }
 
-        // EnableX returns the token string in data.token
         const tokenString = data.token;
         if (!tokenString) {
             console.error('[EnableX Get Token] No token in response:', data);
