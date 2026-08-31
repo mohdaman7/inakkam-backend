@@ -143,8 +143,7 @@ const getToken = async (req, res, next) => {
         const tokenBody = {
             name: resolvedName,
             role: resolvedRole,
-            user_ref: resolvedUserRef,
-            data: { userId: resolvedUserRef }
+            user_ref: resolvedUserRef
         };
 
         console.log(`[EnableX] Generating token: room=${roomId} role=${resolvedRole} user=${resolvedUserRef} name="${resolvedName}"`);
