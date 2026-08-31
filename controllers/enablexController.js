@@ -144,7 +144,7 @@ const getToken = async (req, res, next) => {
             name: resolvedName,
             role: resolvedRole,
             user_ref: resolvedUserRef,
-            data: JSON.stringify({ userId: resolvedUserRef })
+            data: { userId: resolvedUserRef }
         };
 
         console.log(`[EnableX] Generating token: room=${roomId} role=${resolvedRole} user=${resolvedUserRef} name="${resolvedName}"`);
