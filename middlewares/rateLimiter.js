@@ -13,7 +13,7 @@ const isDev = process.env.NODE_ENV === 'development';
  */
 const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: isDev ? 10000 : 500,
+    max: isDev ? 10000 : 5000,
 
     standardHeaders: true,
     legacyHeaders: false,
