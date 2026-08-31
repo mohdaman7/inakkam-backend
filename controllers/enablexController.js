@@ -50,7 +50,7 @@ const createRoom = async (req, res, next) => {
             owner_ref: req.user._id.toString(),
             settings: {
                 description: 'Inakkam real-time call session',
-                mode: 'p2p',
+                mode: 'group',
                 scheduled: false,
                 adhoc: true,
                 duration: 60,
