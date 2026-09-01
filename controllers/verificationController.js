@@ -4,7 +4,12 @@ const { uploadToCloudinary } = require('../middlewares/uploadMiddleware');
 
 // ─── Helper: update user verificationStatus ────────────
 const syncUserStatus = async (userId, status) => {
-    await User.findByIdAndUpdate(userId, { $set: { verificationStatus: status } });
+    await User.findByIdAndUpdate(userId, { 
+        $set: { 
+            verificationStatus: status,
+            verified: status === 'VERIFIED'
+        } 
+    });
 };
 
 // ────────────────────────────────────────────────────────

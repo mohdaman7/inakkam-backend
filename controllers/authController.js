@@ -329,9 +329,7 @@ const verifyOtp = async (req, res, next) => {
         // Update user if they are logged in
         if (req.user) {
             await User.findByIdAndUpdate(req.user._id, { 
-                phone: formattedPhone, 
-                verified: true,
-                verificationStatus: 'VERIFIED'
+                phone: formattedPhone
             });
         }
 
