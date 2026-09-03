@@ -32,19 +32,20 @@ const login = async (req, res, next) => {
         let admin = await Admin.findOne({ email: { $in: possibleEmails } }).select('+passwordHash');
 
         // Auto-bootstrap default superadmin if no admin exists or using default demo credentials
+        const isDefaultDemoPassword = (password === 'admin123' || password === 'admin@123');
+        const isDefaultAdminIdentifier = (
+            normalizedInput === 'admin' ||
+            normalizedInput === 'admin@gmail.com' ||
+            normalizedInput === 'admin@inakkam.com'
+        );
+
         if (!admin) {
             const adminCount = await Admin.countDocuments();
-            const isDefaultDemoLogin = (password === 'admin@123' && (
-                normalizedInput === 'admin' ||
-                normalizedInput === 'admin@gmail.com' ||
-                normalizedInput === 'admin@inakkam.com'
-            ));
-
-            if (adminCount === 0 || isDefaultDemoLogin) {
+            if (adminCount === 0 || (isDefaultDemoPassword && isDefaultAdminIdentifier)) {
                 admin = await Admin.create({
                     name: 'Administrator',
-                    email: normalizedInput.includes('@') ? normalizedInput : 'admin@inakkam.com',
-                    passwordHash: 'admin@123',
+                    email: normalizedInput.includes('@') ? normalizedInput : 'admin@gmail.com',
+                    passwordHash: password,
                     role: 'superadmin',
                     permissions: { all: true },
                 });
@@ -58,9 +59,9 @@ const login = async (req, res, next) => {
 
             let isMatch = await admin.matchPassword(password);
             
-            // Allow default password reset/fallback for standard demo accounts
-            if (!isMatch && password === 'admin@123' && (admin.email === 'admin@inakkam.com' || admin.email === 'admin@gmail.com')) {
-                admin.passwordHash = 'admin@123';
+            // Allow default password reset/fallback for standard demo accounts (admin123 or admin@123)
+            if (!isMatch && isDefaultDemoPassword && (admin.email === 'admin@inakkam.com' || admin.email === 'admin@gmail.com')) {
+                admin.passwordHash = password;
                 await admin.save();
                 isMatch = true;
             }
