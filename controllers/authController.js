@@ -280,10 +280,15 @@ const sendOtp = async (req, res, next) => {
 
         const isMocked = result.mocked === true;
         const msg = isMocked 
-            ? 'OTP sent successfully (Simulated - check terminal)' 
+            ? 'OTP generated successfully. (SMS Simulation: Use code or test code 123456)' 
             : 'OTP sent successfully to your phone';
 
-        return res.json({ success: true, message: msg, mocked: isMocked });
+        return res.json({ 
+            success: true, 
+            message: msg, 
+            mocked: isMocked,
+            otp: isMocked ? otp : undefined 
+        });
     } catch (err) {
         next(err);
     }
