@@ -91,6 +91,16 @@ socket.on(
             try {
                 if (!text || !text.trim()) return;
 
+                const senderUser = await User.findById(userId).lean();
+                const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
+                const isCustomer = !isSenderStaff;
+
+                // Validate 20-character limit for customer messages
+                if (isCustomer && text.trim().length > 20) {
+                    socket.emit('message_error', { tempId, message: 'Customer messages cannot exceed 20 characters.' });
+                    return;
+                }
+
                 let conversation = await Conversation.findOne({
                     _id: conversationId,
                     participants: userId,
@@ -117,14 +127,10 @@ socket.on(
                 });
 
                 if (!activeMatch) {
-                    const [senderUser, targetUser] = await Promise.all([
-                        User.findById(userId).lean(),
-                        User.findById(targetUserId).lean()
-                    ]);
-                    const isSenderAgent = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff');
-                    const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff');
+                    const targetUser = await User.findById(targetUserId).lean();
+                    const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff' || targetUser.role === 'admin');
 
-                    if (isSenderAgent || isTargetAgent) {
+                    if (isSenderStaff || isTargetAgent) {
                         activeMatch = await Match.create({ users: [userId, targetUserId] });
                         await User.updateMany({ _id: { $in: [userId, targetUserId] } }, { $inc: { matchesCount: 1 } });
                     }
@@ -309,10 +315,20 @@ socket.on(
         });
 
         // In-call text chat relay
-        socket.on('webrtc_chat', ({ targetUserId, message }) => {
-            const targetUidStr = String(targetUserId);
-            const payload = { senderId: String(userId), message };
-            io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
+        socket.on('webrtc_chat', async ({ targetUserId, message }) => {
+            try {
+                const senderUser = await User.findById(userId).lean();
+                const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
+                let chatText = message;
+                if (!isSenderStaff && chatText && chatText.length > 20) {
+                    chatText = chatText.slice(0, 20);
+                }
+                const targetUidStr = String(targetUserId);
+                const payload = { senderId: String(userId), message: chatText };
+                io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
+            } catch (err) {
+                console.error('[webrtc_chat error]', err);
+            }
         });
 
         // Disconnect / offline

@@ -181,6 +181,16 @@ const sendMessage = async (req, res, next) => {
         const { text } = req.body;
         if (!text || !text.trim()) return res.status(400).json({ success: false, message: 'Message text is required' });
 
+        const isSenderStaff = req.user && (req.user.isEliteAgent || req.user.isStaff || req.user.role === 'staff' || req.user.role === 'admin');
+        const isCustomer = !isSenderStaff;
+
+        if (isCustomer && text.trim().length > 20) {
+            return res.status(400).json({
+                success: false,
+                message: 'Customer messages cannot exceed 20 characters.'
+            });
+        }
+
         const conversation = await findOrCreateConversation(req.params.id, req.user._id);
 
         if (!conversation) {
