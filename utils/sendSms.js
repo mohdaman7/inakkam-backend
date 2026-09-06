@@ -11,8 +11,8 @@ const twilio = require('twilio');
  */
 const sendSms = async ({ to, body }) => {
     // 1. Check EnableX SMS Credentials
-    const enablexAppId = process.env.ENABLEX_SMS_APP_ID || process.env.ENABLEX_APP_ID;
-    const enablexAppKey = process.env.ENABLEX_SMS_APP_KEY || process.env.ENABLEX_APP_KEY;
+    const enablexAppId = process.env.ENABLEX_SMS_APP_ID || '6a9974f60b4b2ab0cc05bf29';
+    const enablexAppKey = process.env.ENABLEX_SMS_APP_KEY || 'eDezuMa4uEeWueeWuGevaeaNateXuPe9ateD';
 
     if (enablexAppId && enablexAppKey && enablexAppKey !== 'your_enablex_app_key_here') {
         try {
@@ -24,22 +24,23 @@ const sendSms = async ({ to, body }) => {
                     'Authorization': authHeader
                 },
                 body: JSON.stringify({
-                    to: [{ to }],
+                    to: to,
                     channel: 'sms',
+                    text: body,
                     content: { body }
                 })
             });
 
             const data = await response.json();
-            if (response.ok && (data.job_id || data.result === 0 || data.code === 200 || data.status === 'success')) {
-                console.log(`✅ [EnableX SMS] Message sent to ${to}: ${data.job_id || JSON.stringify(data)}`);
-                return { success: true, provider: 'enablex', messageId: data.job_id };
+            if (response.ok && (data.message_id || data.job_id || data.result === 0 || data.code === 200 || data.status === 'success' || data.message === 'Message accepted')) {
+                console.log(`? [EnableX SMS] Message sent to ${to}: ${data.message_id || data.job_id || JSON.stringify(data)}`);
+                return { success: true, provider: 'enablex', messageId: data.message_id || data.job_id };
             } else {
-                console.warn(`⚠️ [EnableX SMS] Response error (${response.status}):`, data);
+                console.warn(`?? [EnableX SMS] Response error (${response.status}):`, data);
                 // Continue to try Twilio or Fallback
             }
         } catch (enablexError) {
-            console.error('❌ [EnableX SMS] Error:', enablexError?.message || enablexError);
+            console.error('? [EnableX SMS] Error:', enablexError?.message || enablexError);
         }
     }
 
@@ -58,13 +59,13 @@ const sendSms = async ({ to, body }) => {
             });
             return { success: true, provider: 'twilio', messageId: message.sid };
         } catch (twilioError) {
-            console.error('❌ [Twilio SMS] Error:', twilioError?.message || twilioError);
+            console.error('? [Twilio SMS] Error:', twilioError?.message || twilioError);
         }
     }
 
     // 3. Graceful Simulation Fallback
     console.log(`\n=========================================`);
-    console.log(`📱 MOCK SMS SERVICE (Simulation / Fallback)`);
+    console.log(`?? MOCK SMS SERVICE (Simulation / Fallback)`);
     console.log(`To: ${to}`);
     console.log(`Message: ${body}`);
     console.log(`=========================================\n`);
