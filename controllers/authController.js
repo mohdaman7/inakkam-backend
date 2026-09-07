@@ -272,11 +272,17 @@ const sendOtp = async (req, res, next) => {
         // Store it with a 5-minute expiration
         otpStore.set(formattedPhone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
 
-        // Send OTP via Twilio utility
-        const result = await sendSms({
-            to: formattedPhone,
-            body: `Your Inakkam verification code is: ${otp}. It will expire in 5 minutes.`
-        });
+        // Send OTP via SMS utility (EnableX / Twilio / Simulation)
+        let result = { success: true, mocked: true };
+        try {
+            result = await sendSms({
+                to: formattedPhone,
+                body: `Your Inakkam verification code is: ${otp}. It will expire in 5 minutes.`
+            });
+        } catch (smsErr) {
+            console.error('[sendOtp] SMS provider error, falling back to simulation:', smsErr?.message || smsErr);
+            result = { success: true, mocked: true };
+        }
 
         const isMocked = result.mocked === true;
         const msg = isMocked 
