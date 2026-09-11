@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Admin = require('../models/Admin');
 const Notification = require('../models/Notification');
 const { sendEmail } = require('../utils/sendEmail');
 const { sendSms } = require('../utils/sendSms');
@@ -101,12 +102,30 @@ const login = async (req, res, next) => {
         const user = await User.findOne(query).select('+passwordHash').select('+refreshToken');
 
         if (!user || user.isDeleted) {
+            // Check if this email belongs to an Admin/Staff account (created via admin dashboard)
+            if (email) {
+                const adminAccount = await Admin.findOne({ email: email.toLowerCase() });
+                if (adminAccount) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'This is a staff/admin account. Please log in using the admin dashboard.',
+                    });
+                }
+            }
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
         const isMatch = await user.matchPassword(password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+
+        // Block staff/elite-agent accounts in the User collection from the user PWA
+        if (user.isStaff || user.isEliteAgent || user.role === 'staff') {
+            return res.status(403).json({
+                success: false,
+                message: 'This is a staff account. Please log in using the admin dashboard.',
+            });
         }
 
         user.lastActive = Date.now();
