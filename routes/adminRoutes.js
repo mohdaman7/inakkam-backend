@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middlewares/auth');
 const { uploadPhoto } = require('../config/cloudinary');
@@ -22,11 +22,12 @@ const adminFakeUserController = require('../controllers/admin/adminFakeUserContr
 const adminNotificationController = require('../controllers/admin/adminNotificationController');
 const adminGiftController = require('../controllers/admin/adminGiftController');
 const verificationController = require('../controllers/verificationController');
+const { getCoinRequests, approveCoinRequest, rejectCoinRequest } = require('../controllers/coinController');
 
-// ─── Public Admin Routes ───────────────────────────────
+// â”€â”€â”€ Public Admin Routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/login', adminAuthController.login);
 
-// ─── Private Admin Routes ( requireAdmin ) ──────────────
+// â”€â”€â”€ Private Admin Routes ( requireAdmin ) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.use(requireAdmin);
 
 router.get('/me', adminAuthController.getMe);
@@ -124,4 +125,10 @@ router.post('/push-notification', uploadPhoto.single('image'), adminNotification
 router.get('/verifications', verificationController.getAllVerifications);
 router.patch('/verifications/:id/status', verificationController.updateVerificationStatus);
 
+
+// Coin Requests (QR Payment Review)
+router.get('/coin-requests', getCoinRequests);
+router.patch('/coin-requests/:id/approve', approveCoinRequest);
+router.patch('/coin-requests/:id/reject', rejectCoinRequest);
 module.exports = router;
+
