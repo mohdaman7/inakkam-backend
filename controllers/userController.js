@@ -13,6 +13,11 @@ const getMe = async (req, res, next) => {
     try {
         const user = await User.findById(req.user._id).lean();
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        
+        if (user.isStaff || user.isEliteAgent || user.role === 'staff' || user.role === 'admin') {
+            return res.status(403).json({ success: false, message: 'Staff accounts cannot access user application' });
+        }
+
         return res.json({ success: true, user });
     } catch (err) {
         next(err);

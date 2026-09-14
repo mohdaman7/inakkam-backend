@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Admin = require('../models/Admin');
 const Notification = require('../models/Notification');
 const { sendEmail } = require('../utils/sendEmail');
 const { sendSms } = require('../utils/sendSms');
@@ -33,7 +34,15 @@ const register = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
         }
 
-        const query = email ? { email: email.toLowerCase().trim() } : { phone: phone.trim() };
+        const normalizedEmail = email ? email.toLowerCase().trim() : null;
+        if (normalizedEmail) {
+            const existingAdmin = await Admin.findOne({ email: normalizedEmail });
+            if (existingAdmin) {
+                return res.status(409).json({ success: false, message: 'This email belongs to an Admin/Staff account. Please use a different email.' });
+            }
+        }
+
+        const query = normalizedEmail ? { email: normalizedEmail } : { phone: phone.trim() };
         const existingUser = await User.findOne(query);
 
         if (existingUser) {
@@ -97,11 +106,50 @@ const login = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Credentials are required' });
         }
 
-        const query = email ? { email: email.toLowerCase() } : { phone };
+        const normalizedEmail = email ? email.toLowerCase().trim() : null;
+        const normalizedPhone = phone ? phone.trim() : null;
+
+        // Rule 1: Reject if identifier is 'admin' or belongs to the Admin collection
+        if (normalizedEmail === 'admin' || normalizedPhone === 'admin') {
+            return res.status(403).json({
+                success: false,
+                isStaff: true,
+                message: 'Staff credentials cannot be used to log in here. Please use the Admin / Staff Portal.'
+            });
+        }
+
+        if (normalizedEmail) {
+            const adminAccount = await Admin.findOne({ email: normalizedEmail });
+            if (adminAccount) {
+                return res.status(403).json({
+                    success: false,
+                    isStaff: true,
+                    message: 'Staff credentials cannot be used to log in here. Please use the Admin / Staff Portal.'
+                });
+            }
+        }
+
+        const query = normalizedEmail ? { email: normalizedEmail } : { phone: normalizedPhone };
         const user = await User.findOne(query).select('+passwordHash').select('+refreshToken');
 
         if (!user || user.isDeleted) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+
+        // Rule 2: Reject if account in User collection is staff, elite agent, or admin
+        const isStaffOrAgent = Boolean(
+            user.isStaff ||
+            user.isEliteAgent ||
+            user.role === 'staff' ||
+            user.role === 'admin'
+        );
+
+        if (isStaffOrAgent) {
+            return res.status(403).json({
+                success: false,
+                isStaff: true,
+                message: 'Staff credentials cannot be used to log in here. Please use the Admin / Staff Portal.'
+            });
         }
 
         const isMatch = await user.matchPassword(password);
@@ -164,6 +212,10 @@ const refreshToken = async (req, res, next) => {
 
         if (!user || user.refreshToken !== token) {
             return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+        }
+
+        if (user.isStaff || user.isEliteAgent || user.role === 'staff' || user.role === 'admin') {
+            return res.status(403).json({ success: false, message: 'Staff accounts cannot access user application' });
         }
 
         const newAccessToken = signAccess(user._id);
