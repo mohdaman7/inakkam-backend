@@ -438,6 +438,30 @@ socket.on(
             }
         });
 
+        // ─── Screen & Video Recording Protection Relay ─────────
+        socket.on('screen_recording_attempt', ({ conversationId, targetUserId, roomId }) => {
+            try {
+                const targetUidStr = targetUserId ? String(targetUserId) : null;
+                const payload = {
+                    conversationId,
+                    roomId: String(roomId || conversationId || ''),
+                    violatorId: String(userId)
+                };
+
+                if (targetUidStr && targetUidStr !== 'null' && targetUidStr !== '[object Object]') {
+                    io.to(`user_${targetUidStr}`).emit('screen_recording_attempt', payload);
+                }
+
+                if (roomId) {
+                    socket.to(String(roomId)).emit('screen_recording_attempt', payload);
+                }
+
+                console.log(`🛡️ [Security] screen_recording_attempt relayed from user=${userId} to target=${targetUidStr}`);
+            } catch (err) {
+                console.error('[Socket screen_recording_attempt error]', err);
+            }
+        });
+
         // Disconnect / offline
         socket.on('disconnect', () => {
             onlineUsers.delete(userId);

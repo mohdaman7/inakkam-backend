@@ -1,4 +1,4 @@
-﻿const getAuthHeader = () => {
+const getAuthHeader = () => {
     const appId = process.env.ENABLEX_APP_ID;
     const appKey = process.env.ENABLEX_APP_KEY;
 
@@ -58,7 +58,7 @@ const createRoom = async (req, res, next) => {
                 participants: '1',
                 quality: 'HD',
                 auto_recording: false,
-                screen_share: true
+                screen_share: false
             },
             sip: { enabled: false }
         };
