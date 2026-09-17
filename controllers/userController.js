@@ -209,4 +209,19 @@ const getAgents = async (req, res, next) => {
     }
 };
 
-module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents };
+// Update notification sound preference
+const updateNotificationSound = async (req, res, next) => {
+    try {
+        const { sound } = req.body;
+        const validSounds = ['default', 'chime', 'bell', 'pop', 'ding', 'melody'];
+        if (!sound || !validSounds.includes(sound)) {
+            return res.status(400).json({ success: false, message: 'Invalid notification sound' });
+        }
+        const user = await User.findByIdAndUpdate(req.user._id, { notificationSound: sound }, { new: true });
+        res.json({ success: true, message: 'Notification sound updated', notificationSound: user.notificationSound });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to update notification sound' });
+    }
+};
+
+module.exports = { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents, updateNotificationSound };

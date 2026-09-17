@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents } = require('../controllers/userController');
+const { getMe, updateMe, completeOnboarding, uploadPhoto, deletePhoto, getUserById, getOnboardingOptions, getAgents, updateNotificationSound } = require('../controllers/userController');
 const { protect } = require('../middlewares/auth');
 const { uploadPhoto: multerPhoto } = require('../config/cloudinary');
 
@@ -10,6 +10,7 @@ router.get('/me', getMe);
 router.get('/agents', getAgents);
 router.get('/onboarding-options', getOnboardingOptions);
 router.put('/me', updateMe);
+router.put('/notification-sound', updateNotificationSound);
 router.put('/me/onboarding', completeOnboarding);
 router.post('/me/photos', multerPhoto.single('photo'), uploadPhoto);
 router.delete('/me/photos/:photoId', deletePhoto);

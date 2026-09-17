@@ -28,6 +28,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const enablexRoutes = require('./routes/enablexRoutes');
 const coinRoutes = require('./routes/coinRoutes');
 const payoutRoutes = require('./routes/payoutRoutes');
+const pageRoutes = require('./routes/pageRoutes');
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/enablex', enablexRoutes);
 app.use('/api/coins', coinRoutes);
 app.use('/api/payout', payoutRoutes);
+app.use('/api/pages', pageRoutes);
 
 
 // ─── 404 Handler ───────────────────────────────────────

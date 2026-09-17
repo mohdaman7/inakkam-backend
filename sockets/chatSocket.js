@@ -315,7 +315,7 @@ socket.on(
         });
 
         // In-call text chat relay
-        socket.on('webrtc_chat', async ({ targetUserId, message }) => {
+        socket.on('webrtc_chat', async ({ targetUserId, message, type, gifUrl }) => {
             try {
                 const senderUser = await User.findById(userId).lean();
                 const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
@@ -324,7 +324,7 @@ socket.on(
                     chatText = chatText.slice(0, 20);
                 }
                 const targetUidStr = String(targetUserId);
-                const payload = { senderId: String(userId), message: chatText };
+                const payload = { senderId: String(userId), message: chatText, type, gifUrl };
                 io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
             } catch (err) {
                 console.error('[webrtc_chat error]', err);
