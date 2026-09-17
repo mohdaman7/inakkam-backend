@@ -337,7 +337,10 @@ socket.on(
                 let chatText = message;
                 let containsPhone = false;
 
-                if (type !== 'gif' && chatText && typeof chatText === 'string') {
+                const actualGifUrl = gifUrl || (type === 'gif' ? message : null) || (typeof message === 'string' && (message.includes('giphy.com') || message.includes('.gif')) ? message : null);
+                const actualType = actualGifUrl ? 'gif' : (type || 'text');
+
+                if (actualType !== 'gif' && chatText && typeof chatText === 'string') {
                     let senderUser = null;
                     if (userId && String(userId).match(/^[0-9a-fA-F]{24}$/)) {
                         try {
@@ -361,22 +364,37 @@ socket.on(
                     }
                 }
 
-                const targetUidStr = targetUserId ? String(targetUserId) : null;
+                // Extract string target UID safely even if an object or nested object is provided
+                let targetUidStr = null;
+                if (targetUserId) {
+                    if (typeof targetUserId === 'object') {
+                        targetUidStr = String(targetUserId._id || targetUserId.id || targetUserId.userId || '');
+                    } else {
+                        targetUidStr = String(targetUserId);
+                    }
+                }
+                if (targetUidStr === '[object Object]' || targetUidStr === 'null' || targetUidStr === 'undefined') {
+                    targetUidStr = null;
+                }
+
                 const msgId = id || `webrtc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
                 const payload = {
                     id: msgId,
+                    socketId: socket.id,
                     senderId: String(userId),
                     senderName: senderName || 'Call Partner',
-                    message: chatText,
-                    type: type || 'text',
-                    gifUrl: gifUrl || null,
+                    message: actualType === 'gif' ? (chatText || actualGifUrl) : chatText,
+                    type: actualType,
+                    gifUrl: actualGifUrl,
                     roomId: roomId ? String(roomId) : '',
                     conversationId: conversationId ? String(conversationId) : '',
                     timestamp: Date.now()
                 };
 
+                console.log(`💬 [Socket webrtc_chat] from ${userId} (${payload.type}) -> target:${targetUidStr} room:${roomId} conv:${conversationId}`);
+
                 // 1. Emit to target user's personal room
-                if (targetUidStr && targetUidStr !== '[object Object]' && targetUidStr !== 'null' && targetUidStr.length > 0) {
+                if (targetUidStr && targetUidStr.length > 0) {
                     io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
                 }
 
