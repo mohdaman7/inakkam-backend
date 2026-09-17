@@ -213,7 +213,7 @@ const getAgents = async (req, res, next) => {
 const updateNotificationSound = async (req, res, next) => {
     try {
         const { sound } = req.body;
-        const validSounds = ['default', 'chime', 'bell', 'pop', 'ding', 'melody'];
+        const validSounds = ['default', 'chime', 'bell', 'pop', 'ding', 'melody', 'bubble', 'harp', 'crystal', 'magic', 'whistle', 'pulse', 'flute', 'cyber'];
         if (!sound || !validSounds.includes(sound)) {
             return res.status(400).json({ success: false, message: 'Invalid notification sound' });
         }

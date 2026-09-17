@@ -85,7 +85,7 @@ const userSchema = new mongoose.Schema({
     dob: { type: String, default: '' },
     state: { type: String, default: '' },
     city: { type: String, default: '' },
-    notificationSound: { type: String, enum: ['default', 'chime', 'bell', 'pop', 'ding', 'melody'], default: 'default' },
+    notificationSound: { type: String, enum: ['default', 'chime', 'bell', 'pop', 'ding', 'melody', 'bubble', 'harp', 'crystal', 'magic', 'whistle', 'pulse', 'flute', 'cyber'], default: 'default' },
     weight: { type: String, default: '' },
     occupation: { type: String, default: '' },
     payoutDetails: {
