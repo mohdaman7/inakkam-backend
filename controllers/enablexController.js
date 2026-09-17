@@ -54,8 +54,8 @@ const createRoom = async (req, res, next) => {
                 scheduled: false,
                 adhoc: true,
                 duration: 60,
-                moderators: '1',
-                participants: '1',
+                moderators: '6',
+                participants: '6',
                 quality: 'HD',
                 auto_recording: false,
                 screen_share: false
