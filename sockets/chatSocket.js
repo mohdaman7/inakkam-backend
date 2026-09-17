@@ -96,8 +96,16 @@ socket.on(
                 const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
                 const isCustomer = !isSenderStaff;
 
-                // Validate 20-character limit for customer messages
-                if (isCustomer && text.trim().length > 20) {
+                // Helper to recognize GIF and media URLs so they are not rejected by the 20-char text limit
+                const isGifUrl = (str) => {
+                    if (!str || typeof str !== 'string') return false;
+                    const s = str.trim();
+                    return (s.startsWith('http://') || s.startsWith('https://')) &&
+                        (s.includes('giphy') || s.includes('tenor') || s.includes('.gif') || s.includes('.webp') || s.includes('/media/'));
+                };
+
+                // Validate 20-character limit for customer messages (GIFs & media URLs are exempt)
+                if (isCustomer && text.trim().length > 20 && !isGifUrl(text.trim())) {
                     socket.emit('message_error', { tempId, message: 'Customer messages cannot exceed 20 characters.' });
                     return;
                 }
@@ -338,7 +346,14 @@ socket.on(
                 let chatText = message;
                 let containsPhone = false;
 
-                const actualGifUrl = gifUrl || (type === 'gif' ? message : null) || (typeof message === 'string' && (message.includes('giphy.com') || message.includes('.gif')) ? message : null);
+                const isMediaOrGif = (str) => {
+                    if (!str || typeof str !== 'string') return false;
+                    const s = str.trim();
+                    return (s.startsWith('http://') || s.startsWith('https://')) &&
+                        (s.includes('giphy') || s.includes('tenor') || s.includes('.gif') || s.includes('.webp') || s.includes('/media/'));
+                };
+
+                const actualGifUrl = gifUrl || (type === 'gif' ? message : null) || (isMediaOrGif(message) ? message : null) || (typeof message === 'string' && (message.includes('giphy') || message.includes('tenor') || message.includes('.gif')) ? message : null);
                 const actualType = actualGifUrl ? 'gif' : (type || 'text');
 
                 if (actualType !== 'gif' && chatText && typeof chatText === 'string') {
@@ -360,7 +375,7 @@ socket.on(
                         chatText = '[🛡️ Phone number removed for privacy]';
                     }
 
-                    if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone) {
+                    if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone && !isMediaOrGif(chatText)) {
                         chatText = chatText.slice(0, 20);
                     }
                 }
