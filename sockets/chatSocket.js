@@ -337,7 +337,19 @@ socket.on(
                 const senderUser = await User.findById(userId).lean();
                 const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
                 let chatText = message;
-                if (!isSenderStaff && chatText && chatText.length > 20) {
+                let containsPhone = false;
+
+                if (chatText && typeof chatText === 'string') {
+                    // Check if message contains 7+ digits or phone number pattern
+                    const phonePattern = /(?:(?:\+|0{0,2})91[\s.-]?)?[6-9]\d{9}/;
+                    const digitSeqPattern = /(?:\d[\s.,\-_/()]*){7,}/;
+                    if (phonePattern.test(chatText) || digitSeqPattern.test(chatText)) {
+                        containsPhone = true;
+                        chatText = '[🛡️ Phone number removed for privacy]';
+                    }
+                }
+
+                if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone) {
                     chatText = chatText.slice(0, 20);
                 }
                 const targetUidStr = targetUserId ? String(targetUserId) : null;
@@ -359,8 +371,70 @@ socket.on(
                 if (roomId) {
                     socket.to(String(roomId)).emit('webrtc_chat', payload);
                 }
+
+                // If a phone number was attempted, trigger audio security block
+                if (containsPhone) {
+                    const blockPayload = {
+                        conversationId: roomId,
+                        roomId: String(roomId || ''),
+                        reason: 'phone_number_in_chat',
+                        blockedUserId: String(userId),
+                    };
+                    if (targetUidStr && targetUidStr !== 'null') {
+                        io.to(`user_${targetUidStr}`).emit('call_audio_security_block', blockPayload);
+                    }
+                    socket.emit('call_audio_security_block', blockPayload);
+                }
             } catch (err) {
                 console.error('[webrtc_chat error]', err);
+            }
+        });
+
+        // ─── Call Audio Security (Phone Number Mention / Share Defense) ──
+        socket.on('call_audio_security_block', ({ conversationId, targetUserId, roomId, reason }) => {
+            try {
+                const targetUidStr = targetUserId ? String(targetUserId) : null;
+                const payload = {
+                    conversationId,
+                    roomId: String(roomId || conversationId || ''),
+                    reason: reason || 'phone_number_detected',
+                    blockedUserId: String(userId)
+                };
+
+                if (targetUidStr && targetUidStr !== 'null' && targetUidStr !== '[object Object]') {
+                    io.to(`user_${targetUidStr}`).emit('call_audio_security_block', payload);
+                }
+
+                if (roomId) {
+                    socket.to(String(roomId)).emit('call_audio_security_block', payload);
+                }
+
+                console.log(`🛡️ [Security] call_audio_security_block relayed: user=${userId} to target=${targetUidStr} (room=${roomId})`);
+            } catch (err) {
+                console.error('[Socket call_audio_security_block error]', err);
+            }
+        });
+
+        socket.on('call_audio_security_unblock', ({ conversationId, targetUserId, roomId }) => {
+            try {
+                const targetUidStr = targetUserId ? String(targetUserId) : null;
+                const payload = {
+                    conversationId,
+                    roomId: String(roomId || conversationId || ''),
+                    unblockedUserId: String(userId)
+                };
+
+                if (targetUidStr && targetUidStr !== 'null' && targetUidStr !== '[object Object]') {
+                    io.to(`user_${targetUidStr}`).emit('call_audio_security_unblock', payload);
+                }
+
+                if (roomId) {
+                    socket.to(String(roomId)).emit('call_audio_security_unblock', payload);
+                }
+
+                console.log(`🛡️ [Security] call_audio_security_unblock relayed: user=${userId}`);
+            } catch (err) {
+                console.error('[Socket call_audio_security_unblock error]', err);
             }
         });
 
