@@ -166,10 +166,27 @@ socket.on(
 
                 const populated = await Message.findById(message._id).populate('sender', 'name photos').lean();
 
-                // Broadcast to everyone in the room (including sender for confirmation)
-                io.to(conversation._id.toString()).emit('new_message', { ...populated, tempId });
+                const messagePayload = {
+                    ...populated,
+                    tempId,
+                    conversationId: conversation._id.toString(),
+                    conversation: conversation._id.toString(),
+                };
+
+                // Broadcast to conversation room
+                io.to(conversation._id.toString()).emit('new_message', messagePayload);
                 if (conversationId && conversationId !== conversation._id.toString()) {
-                    io.to(conversationId).emit('new_message', { ...populated, tempId });
+                    io.to(conversationId).emit('new_message', messagePayload);
+                }
+
+                // ALWAYS broadcast to both participants' direct user rooms for instant on-the-spot delivery!
+                if (conversation.participants && Array.isArray(conversation.participants)) {
+                    conversation.participants.forEach((participantId) => {
+                        const pidStr = participantId ? participantId.toString() : '';
+                        if (pidStr) {
+                            io.to(`user_${pidStr}`).emit('new_message', messagePayload);
+                        }
+                    });
                 }
             } catch (err) {
                 socket.emit('message_error', { tempId, message: 'Failed to send message' });
@@ -314,8 +331,8 @@ socket.on(
             io.to(`user_${targetUidStr}`).emit('webrtc_ice_candidate', payload);
         });
 
-        // In-call text chat relay
-        socket.on('webrtc_chat', async ({ targetUserId, message, type, gifUrl }) => {
+        // In-call text chat & GIF relay
+        socket.on('webrtc_chat', async ({ targetUserId, roomId, message, type, gifUrl, senderName }) => {
             try {
                 const senderUser = await User.findById(userId).lean();
                 const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
@@ -323,9 +340,25 @@ socket.on(
                 if (!isSenderStaff && chatText && chatText.length > 20) {
                     chatText = chatText.slice(0, 20);
                 }
-                const targetUidStr = String(targetUserId);
-                const payload = { senderId: String(userId), message: chatText, type, gifUrl };
-                io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
+                const targetUidStr = targetUserId ? String(targetUserId) : null;
+                const payload = {
+                    senderId: String(userId),
+                    senderName: senderName || senderUser?.name || 'Inakkam User',
+                    message: chatText,
+                    type,
+                    gifUrl,
+                    roomId
+                };
+
+                // 1. Emit to target user's personal room
+                if (targetUidStr && targetUidStr !== '[object Object]' && targetUidStr !== 'null') {
+                    io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
+                }
+
+                // 2. Also emit to the call session room so both sides receive it regardless of ID formatting
+                if (roomId) {
+                    socket.to(String(roomId)).emit('webrtc_chat', payload);
+                }
             } catch (err) {
                 console.error('[webrtc_chat error]', err);
             }

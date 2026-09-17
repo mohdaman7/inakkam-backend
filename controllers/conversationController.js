@@ -212,6 +212,26 @@ const sendMessage = async (req, res, next) => {
         await conversation.save();
 
         const populated = await message.populate('sender', 'name photos');
+
+        // Broadcast real-time message via Socket.IO if available
+        const io = req.app.get('io');
+        if (io) {
+            const messagePayload = {
+                ...populated.toObject(),
+                conversationId: conversation._id.toString(),
+                conversation: conversation._id.toString(),
+            };
+            io.to(conversation._id.toString()).emit('new_message', messagePayload);
+            if (conversation.participants && Array.isArray(conversation.participants)) {
+                conversation.participants.forEach((p) => {
+                    const pidStr = p ? p.toString() : '';
+                    if (pidStr) {
+                        io.to(`user_${pidStr}`).emit('new_message', messagePayload);
+                    }
+                });
+            }
+        }
+
         return res.status(201).json({ success: true, message: populated });
     } catch (err) {
         next(err);
