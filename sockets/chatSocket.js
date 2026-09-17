@@ -332,14 +332,22 @@ socket.on(
         });
 
         // In-call text chat & GIF relay
-        socket.on('webrtc_chat', async ({ targetUserId, roomId, message, type, gifUrl, senderName }) => {
+        socket.on('webrtc_chat', async ({ id, targetUserId, roomId, conversationId, message, type, gifUrl, senderName }) => {
             try {
-                const senderUser = await User.findById(userId).lean();
-                const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
                 let chatText = message;
                 let containsPhone = false;
 
-                if (chatText && typeof chatText === 'string') {
+                if (type !== 'gif' && chatText && typeof chatText === 'string') {
+                    let senderUser = null;
+                    if (userId && String(userId).match(/^[0-9a-fA-F]{24}$/)) {
+                        try {
+                            senderUser = await User.findById(userId).lean();
+                        } catch (dbErr) {
+                            console.warn('[webrtc_chat] senderUser lookup error:', dbErr);
+                        }
+                    }
+                    const isSenderStaff = senderUser && (senderUser.isEliteAgent || senderUser.isStaff || senderUser.role === 'staff' || senderUser.role === 'admin');
+
                     // Check if message contains 7+ digits or phone number pattern
                     const phonePattern = /(?:(?:\+|0{0,2})91[\s.-]?)?[6-9]\d{9}/;
                     const digitSeqPattern = /(?:\d[\s.,\-_/()]*){7,}/;
@@ -347,35 +355,45 @@ socket.on(
                         containsPhone = true;
                         chatText = '[🛡️ Phone number removed for privacy]';
                     }
+
+                    if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone) {
+                        chatText = chatText.slice(0, 20);
+                    }
                 }
 
-                if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone) {
-                    chatText = chatText.slice(0, 20);
-                }
                 const targetUidStr = targetUserId ? String(targetUserId) : null;
+                const msgId = id || `webrtc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
                 const payload = {
+                    id: msgId,
                     senderId: String(userId),
-                    senderName: senderName || senderUser?.name || 'Inakkam User',
+                    senderName: senderName || 'Call Partner',
                     message: chatText,
-                    type,
-                    gifUrl,
-                    roomId
+                    type: type || 'text',
+                    gifUrl: gifUrl || null,
+                    roomId: roomId ? String(roomId) : '',
+                    conversationId: conversationId ? String(conversationId) : '',
+                    timestamp: Date.now()
                 };
 
                 // 1. Emit to target user's personal room
-                if (targetUidStr && targetUidStr !== '[object Object]' && targetUidStr !== 'null') {
+                if (targetUidStr && targetUidStr !== '[object Object]' && targetUidStr !== 'null' && targetUidStr.length > 0) {
                     io.to(`user_${targetUidStr}`).emit('webrtc_chat', payload);
                 }
 
-                // 2. Also emit to the call session room so both sides receive it regardless of ID formatting
+                // 2. Also emit to the call session room so both sides receive it
                 if (roomId) {
                     socket.to(String(roomId)).emit('webrtc_chat', payload);
+                }
+
+                // 3. Also emit to conversation room if different from roomId
+                if (conversationId && String(conversationId) !== String(roomId)) {
+                    socket.to(String(conversationId)).emit('webrtc_chat', payload);
                 }
 
                 // If a phone number was attempted, trigger audio security block
                 if (containsPhone) {
                     const blockPayload = {
-                        conversationId: roomId,
+                        conversationId: conversationId || roomId,
                         roomId: String(roomId || ''),
                         reason: 'phone_number_in_chat',
                         blockedUserId: String(userId),
