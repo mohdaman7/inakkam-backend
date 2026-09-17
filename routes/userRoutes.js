@@ -10,7 +10,15 @@ router.get('/me', getMe);
 router.get('/agents', getAgents);
 router.get('/onboarding-options', getOnboardingOptions);
 router.put('/me', updateMe);
-router.put('/notification-sound', updateNotificationSound);
+router.route('/notification-sound')
+    .get((req, res) => res.json({ success: true, notificationSound: req.user.notificationSound || 'default' }))
+    .put(updateNotificationSound)
+    .patch(updateNotificationSound)
+    .post(updateNotificationSound);
+router.route('/me/notification-sound')
+    .put(updateNotificationSound)
+    .patch(updateNotificationSound)
+    .post(updateNotificationSound);
 router.put('/me/onboarding', completeOnboarding);
 router.post('/me/photos', multerPhoto.single('photo'), uploadPhoto);
 router.delete('/me/photos/:photoId', deletePhoto);

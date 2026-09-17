@@ -33,7 +33,7 @@ const updateMe = async (req, res, next) => {
             'name', 'age', 'bio', 'work', 'education', 'interests', 'prompts',
             'zodiac', 'height', 'exercise', 'relationship', 'religion',
             'languages', 'gender', 'interestedIn', 'ageRange', 'maxDistance', 'location',
-            'dob', 'occupation', 'weight', 'state', 'city',
+            'dob', 'occupation', 'weight', 'state', 'city', 'notificationSound'
         ];
         const updates = {};
         allowed.forEach((field) => {
@@ -212,15 +212,15 @@ const getAgents = async (req, res, next) => {
 // Update notification sound preference
 const updateNotificationSound = async (req, res, next) => {
     try {
-        const { sound } = req.body;
+        const sound = (req.body.sound || req.body.notificationSound || '').trim();
         const validSounds = ['default', 'chime', 'bell', 'pop', 'ding', 'melody', 'bubble', 'harp', 'crystal', 'magic', 'whistle', 'pulse', 'flute', 'cyber'];
         if (!sound || !validSounds.includes(sound)) {
             return res.status(400).json({ success: false, message: 'Invalid notification sound' });
         }
         const user = await User.findByIdAndUpdate(req.user._id, { notificationSound: sound }, { new: true });
-        res.json({ success: true, message: 'Notification sound updated', notificationSound: user.notificationSound });
+        return res.json({ success: true, message: 'Notification sound updated', notificationSound: user.notificationSound });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to update notification sound' });
+        return res.status(500).json({ success: false, message: 'Failed to update notification sound' });
     }
 };
 
