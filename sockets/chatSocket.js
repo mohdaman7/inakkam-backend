@@ -2,6 +2,7 @@ const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Match = require('../models/Match');
 const User = require('../models/User');
+const audioSecurityService = require('../services/audioSecurityService');
 
 // Map of userId -> socketId for presence tracking
 const onlineUsers = new Map();
@@ -408,6 +409,25 @@ socket.on(
                     socket.to(String(conversationId)).emit('webrtc_chat', payload);
                 }
 
+                // 4. Persist message to DB if conversationId is a valid Mongo ObjectId
+                if (conversationId && String(conversationId).match(/^[0-9a-fA-F]{24}$/) && !containsPhone && (chatText || actualGifUrl)) {
+                    try {
+                        const savedMsg = await Message.create({
+                            conversation: conversationId,
+                            sender: userId,
+                            text: actualType === 'gif' ? (actualGifUrl || chatText) : chatText,
+                            readBy: [userId],
+                        });
+                        await Conversation.findByIdAndUpdate(conversationId, {
+                            lastMessage: savedMsg._id,
+                            lastMessageAt: savedMsg.createdAt,
+                        }).exec();
+                        console.log(`💾 [webrtc_chat] Persisted in-call message to conversation ${conversationId}`);
+                    } catch (dbSaveErr) {
+                        console.warn('[webrtc_chat] Non-fatal DB save error:', dbSaveErr.message);
+                    }
+                }
+
                 // If a phone number was attempted, trigger audio security block
                 if (containsPhone) {
                     const blockPayload = {
@@ -495,6 +515,23 @@ socket.on(
                 console.log(`🛡️ [Security] screen_recording_attempt relayed from user=${userId} to target=${targetUidStr}`);
             } catch (err) {
                 console.error('[Socket screen_recording_attempt error]', err);
+            }
+        });
+
+        // ─── Real-Time In-Call Audio Stream Chunk for AI Speech Security ──
+        socket.on('call_audio_chunk', async ({ audio, roomId, conversationId, targetUserId }) => {
+            try {
+                if (!audio) return;
+                await audioSecurityService.processAudioChunk(audio, {
+                    roomId,
+                    conversationId,
+                    userId,
+                    targetUserId,
+                    io,
+                    socket,
+                });
+            } catch (chunkErr) {
+                console.warn('[call_audio_chunk error]', chunkErr);
             }
         });
 
