@@ -354,7 +354,31 @@ socket.on(
                         (s.includes('giphy') || s.includes('tenor') || s.includes('.gif') || s.includes('.webp') || s.includes('/media/'));
                 };
 
-                const actualGifUrl = gifUrl || (type === 'gif' ? message : null) || (isMediaOrGif(message) ? message : null) || (typeof message === 'string' && (message.includes('giphy') || message.includes('tenor') || message.includes('.gif')) ? message : null);
+                const extractGiphyId = (url) => {
+                    if (!url || typeof url !== 'string') return null;
+                    const s = url.trim();
+                    const iMatch = s.match(/i\.giphy\.com\/(?:media\/)?([a-zA-Z0-9_-]+?)(?:\.gif|\/|$|\?)/i);
+                    if (iMatch && iMatch[1] && iMatch[1] !== 'media' && iMatch[1] !== 'v1' && iMatch[1].length > 3) return iMatch[1];
+                    const mediaV1Match = s.match(/media[0-9]?\.giphy\.com\/media\/v1\.[^/]+\/([a-zA-Z0-9_-]+)\//i);
+                    if (mediaV1Match && mediaV1Match[1] && mediaV1Match[1] !== 'v1') return mediaV1Match[1];
+                    const mediaDirectMatch = s.match(/media[0-9]?\.giphy\.com\/media\/([a-zA-Z0-9_-]+)\//i);
+                    if (mediaDirectMatch && mediaDirectMatch[1] && !mediaDirectMatch[1].startsWith('v1.') && mediaDirectMatch[1] !== 'v1') return mediaDirectMatch[1];
+                    const webMatch = s.match(/giphy\.com\/(?:gifs|embed)\/(?:.*-)?([a-zA-Z0-9_-]+)(?:\/|$|\?)/i);
+                    if (webMatch && webMatch[1]) return webMatch[1];
+                    return null;
+                };
+
+                const cleanBackendGifUrl = (url) => {
+                    if (!url || typeof url !== 'string') return null;
+                    const trimmed = url.trim();
+                    const gid = extractGiphyId(trimmed);
+                    if (gid && gid !== 'v1') return `https://i.giphy.com/${gid}.gif`;
+                    if (trimmed.includes('v1.gif') || trimmed.endsWith('/v1')) return 'https://i.giphy.com/BPJmthQ3YRwD6QqcVD.gif';
+                    return trimmed;
+                };
+
+                const candidateGifUrl = gifUrl || (type === 'gif' ? message : null) || (isMediaOrGif(message) ? message : null) || (typeof message === 'string' && (message.includes('giphy') || message.includes('tenor') || message.includes('.gif')) ? message : null);
+                const actualGifUrl = candidateGifUrl ? cleanBackendGifUrl(candidateGifUrl) : null;
                 const actualType = actualGifUrl ? 'gif' : (type || 'text');
 
                 if (actualType !== 'gif' && chatText && typeof chatText === 'string') {
