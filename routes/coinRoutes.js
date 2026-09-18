@@ -7,9 +7,11 @@ const {
     getMyCoinRequests,
     deductMessageCoin,
     deductCallCoin,
-    sendGift
+    sendGift,
+    getActiveGifts,
+    claimGift
 } = require('../controllers/coinController');
-const { protect } = require('../middlewares/auth');
+const { protect, optionalAuth } = require('../middlewares/auth');
 
 router.get('/packages', getCoinPackages);
 router.post('/purchase', protect, purchaseCoins);
@@ -18,5 +20,7 @@ router.get('/my-requests', protect, getMyCoinRequests);
 router.post('/deduct-message', protect, deductMessageCoin);
 router.post('/deduct-call', protect, deductCallCoin);
 router.post('/send-gift', protect, sendGift);
+router.get('/active-gifts', optionalAuth, getActiveGifts);
+router.post('/claim-gift/:id', protect, claimGift);
 
 module.exports = router;

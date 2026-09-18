@@ -69,6 +69,7 @@ router.delete('/religions/:id', adminReligionController.deleteReligion);
 router.get('/gifts', adminGiftController.getGifts);
 router.post('/gifts', uploadPhoto.single('image'), adminGiftController.createGift);
 router.put('/gifts/:id', uploadPhoto.single('image'), adminGiftController.updateGift);
+router.post('/gifts/:id/extend', adminGiftController.extendGift);
 router.delete('/gifts/:id', adminGiftController.deleteGift);
 
 // Relation Goals

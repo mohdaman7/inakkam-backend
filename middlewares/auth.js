@@ -78,4 +78,23 @@ const requireAdmin = async (req, res, next) => {
     }
 };
 
-module.exports = { protect, requirePremium, requireAdmin };
+
+const optionalAuth = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+            const user = await User.findById(decoded.id).select('-passwordHash -refreshToken');
+            if (user && !user.isDeleted) {
+                req.user = user;
+            }
+        } catch (err) {
+            // Ignore invalid token for optional auth
+        }
+    }
+    next();
+};
+
+module.exports = {
+    optionalAuth, protect, requirePremium, requireAdmin };

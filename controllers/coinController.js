@@ -455,7 +455,161 @@ const sendGift = async (req, res, next) => {
     }
 };
 
+
+// @desc    Get active claimable gifts for customer PWA popup
+// @route   GET /api/coins/active-gifts
+const getActiveGifts = async (req, res, next) => {
+    try {
+        const Gift = require('../models/Gift');
+        const now = new Date();
+
+        // Fetch active gifts that haven't expired yet
+        const activeGifts = await Gift.find({
+            status: 1,
+            $or: [
+                { expiresAt: { $exists: false } },
+                { expiresAt: null },
+                { expiresAt: { $gt: now } }
+            ]
+        }).sort({ createdAt: -1 }).lean();
+
+        const currentUserId = req.user ? req.user._id.toString() : null;
+
+        const formatted = activeGifts.map(g => {
+            const hasClaimed = currentUserId 
+                ? (g.claimedBy && g.claimedBy.some(c => c.user && c.user.toString() === currentUserId)) 
+                : false;
+
+            const msRemaining = g.expiresAt ? Math.max(0, new Date(g.expiresAt).getTime() - now.getTime()) : null;
+
+            return {
+                _id: g._id,
+                title: g.title,
+                description: g.description,
+                image: g.image,
+                coinReward: g.coinReward || g.coinCost || 50,
+                durationHours: g.durationHours,
+                expiresAt: g.expiresAt,
+                msRemaining,
+                isClaimed: hasClaimed,
+                totalClaims: (g.claimedBy && g.claimedBy.length) || g.totalClaims || 0,
+            };
+        });
+
+        const unclaimedGifts = formatted.filter(g => !g.isClaimed);
+
+        return res.json({
+            success: true,
+            gifts: formatted,
+            unclaimedCount: unclaimedGifts.length,
+            activeCount: formatted.length,
+            featuredGift: unclaimedGifts.length > 0 ? unclaimedGifts[0] : (formatted[0] || null),
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc    Claim free coins from a gift drop
+// @route   POST /api/coins/claim-gift/:id
+const claimGift = async (req, res, next) => {
+    try {
+        const Gift = require('../models/Gift');
+        const Payment = require('../models/Payment');
+        const Notification = require('../models/Notification');
+
+        const gift = await Gift.findById(req.params.id);
+        if (!gift || gift.status !== 1) {
+            return res.status(404).json({ success: false, message: 'Gift not found or inactive' });
+        }
+
+        const now = new Date();
+        if (gift.expiresAt && now > new Date(gift.expiresAt)) {
+            return res.status(400).json({ success: false, message: 'Sorry, this gift drop has expired!' });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Check if user already claimed this gift
+        const alreadyClaimed = gift.claimedBy && gift.claimedBy.some(c => c.user && c.user.toString() === user._id.toString());
+        if (alreadyClaimed) {
+            return res.status(400).json({
+                success: false,
+                alreadyClaimed: true,
+                message: 'You have already claimed this gift box!'
+            });
+        }
+
+        // Check max claims limit if configured
+        if (gift.maxClaims > 0 && gift.claimedBy && gift.claimedBy.length >= gift.maxClaims) {
+            return res.status(400).json({ success: false, message: 'This gift claim limit has been reached!' });
+        }
+
+        const coinReward = Number(gift.coinReward || gift.coinCost || 50);
+
+        // Credit user wallet
+        if (!user.wallet) user.wallet = {};
+        user.wallet.balance = (user.wallet.balance || 0) + coinReward;
+        await user.save();
+
+        // Record claim in gift
+        gift.claimedBy.push({
+            user: user._id,
+            claimedAt: new Date()
+        });
+        gift.totalClaims = (gift.totalClaims || 0) + 1;
+        await gift.save();
+
+        // Record in Payment collection for transaction history
+        try {
+            await Payment.create({
+                user: user._id,
+                type: 'gift_claim',
+                planId: `gift_${gift._id}`,
+                amount: 0,
+                currency: 'INR',
+                status: 'completed',
+                paymentMethod: 'free_drop',
+                meta: {
+                    coinsAdded: coinReward,
+                    giftId: gift._id,
+                    giftTitle: gift.title
+                }
+            });
+        } catch (payErr) {
+            console.warn('Payment record warning:', payErr.message);
+        }
+
+        // Send celebratory in-app notification
+        try {
+            await Notification.create({
+                user: user._id,
+                type: 'gift_claimed',
+                title: 'Free Gift Unlocked! 🎁',
+                message: `You claimed ${coinReward} free coins from "${gift.title}"!`,
+                data: { giftId: gift._id, coins: coinReward }
+            });
+        } catch (notifErr) {
+            console.warn('Notification warning:', notifErr.message);
+        }
+
+        return res.json({
+            success: true,
+            coinsClaimed: coinReward,
+            newBalance: user.wallet.balance,
+            message: `🎉 Congratulations! You received ${coinReward} Free Coins!`
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
+    getActiveGifts,
+    claimGift,
     getCoinPackages,
     purchaseCoins,
     submitCoinRequest,
