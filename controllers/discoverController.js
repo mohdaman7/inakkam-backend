@@ -56,6 +56,8 @@ const getDiscover = async (req, res, next) => {
         const filter = {
             _id: { $nin: excludedIds },
             isDeleted: { $ne: true },
+            isBlocked: { $ne: true },
+            isActive: { $ne: false },
         };
 
         // Flexible gender preference matching

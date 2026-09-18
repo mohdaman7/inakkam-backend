@@ -7,6 +7,108 @@ const audioSecurityService = require('../services/audioSecurityService');
 // Map of userId -> socketId for presence tracking
 const onlineUsers = new Map();
 
+// Active call sessions for 30s timeout & auto-forwarding
+const activeCallSessions = new Map();
+
+// Helper to handle missed calls & auto-forwarding
+async function handleCallTimeoutOrDecline(io, sessionKey, agentId, reason = 'timeout') {
+    const session = activeCallSessions.get(sessionKey);
+    if (!session) return;
+
+    if (session.timer) {
+        clearTimeout(session.timer);
+        session.timer = null;
+    }
+
+    try {
+        const agentUidStr = String(agentId);
+        const agent = await User.findById(agentUidStr);
+        if (agent) {
+            const isAgent = agent.isEliteAgent || agent.isStaff || agent.role === 'staff';
+            if (isAgent) {
+                agent.consecutiveMissedCalls = (agent.consecutiveMissedCalls || 0) + 1;
+                console.log(`⚠️ Agent ${agent.name} missed call (${reason}). Consecutive: ${agent.consecutiveMissedCalls}/5`);
+
+                if (agent.consecutiveMissedCalls >= 5) {
+                    agent.isActive = false;
+                    agent.isBlocked = true;
+                    agent.blockedReason = '5 consecutive missed calls';
+                    await agent.save();
+
+                    console.log(`🚫 Agent ${agent.name} (${agent._id}) auto-blocked due to 5 missed calls.`);
+                    io.to(`user_${agentUidStr}`).emit('account_blocked', {
+                        message: 'Your host account has been suspended due to 5 consecutive missed calls. You will not receive calls or appear on the website until reactivated by an Admin.'
+                    });
+                } else {
+                    await agent.save();
+                }
+            }
+        }
+
+        // Notify agent's screen to dismiss the incoming popup
+        io.to(`user_${agentUidStr}`).emit('call_ended', { conversationId: session.conversationId, reason: 'Call timed out' });
+
+        // Query next available online Elite Agent who has not been attempted yet
+        const candidateAgents = await User.find({
+            _id: { $nin: Array.from(session.attemptedAgents) },
+            $or: [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }],
+            isDeleted: { $ne: true },
+            isBlocked: { $ne: true },
+            isActive: { $ne: false }
+        }).select('name photos isOnline').lean();
+
+        // Find connected / online agent
+        let nextAgent = candidateAgents.find(a => onlineUsers.has(String(a._id)));
+        if (!nextAgent && candidateAgents.length > 0) {
+            // If none in onlineUsers map, pick first eligible online user
+            nextAgent = candidateAgents.find(a => a.isOnline) || candidateAgents[0];
+        }
+
+        if (nextAgent) {
+            const nextAgentIdStr = String(nextAgent._id);
+            session.attemptedAgents.add(nextAgentIdStr);
+            session.currentTargetAgentId = nextAgentIdStr;
+
+            console.log(`🔀 Forwarding call from ${session.callerName} to next agent ${nextAgent.name} (${nextAgentIdStr})`);
+
+            // Notify caller about forwarding
+            io.to(`user_${session.callerId}`).emit('call_forwarding', {
+                message: `Host unavailable. Routing your call to ${nextAgent.name || 'next available host'}...`,
+                nextAgentName: nextAgent.name,
+                nextAgentPhoto: nextAgent.photos?.[0]?.url || ''
+            });
+
+            // Emit incoming call to next agent with 30s timeout
+            const callPayload = {
+                conversationId: session.conversationId,
+                callerId: session.callerId,
+                callerName: session.callerName,
+                callerPhoto: session.callerPhoto,
+                roomId: session.roomId,
+                callType: session.callType,
+                timeout: 30
+            };
+            io.to(`user_${nextAgentIdStr}`).emit('incoming_call', callPayload);
+
+            // Restart 30-second timer for the next agent
+            session.timer = setTimeout(() => {
+                handleCallTimeoutOrDecline(io, sessionKey, nextAgentIdStr, 'timeout');
+            }, 30000);
+        } else {
+            console.log(`❌ No more available agents for call from ${session.callerName}. Ending call.`);
+            io.to(`user_${session.callerId}`).emit('call_ended', {
+                conversationId: session.conversationId,
+                message: 'All hosts are currently busy or unavailable. Please try again later.'
+            });
+            activeCallSessions.delete(sessionKey);
+            if (session.roomId) activeCallSessions.delete(session.roomId);
+        }
+    } catch (err) {
+        console.error('[handleCallTimeoutOrDecline Error]', err);
+        activeCallSessions.delete(sessionKey);
+    }
+}
+
 const chatSocket = (io) => {
     io.on('connection', (socket) => {
         const userId = socket.handshake.auth?.userId;
@@ -226,12 +328,23 @@ socket.on(
             }
         });
 
-        // ─── Call Signaling ─────────────────────────────────────
+        // ─── Call Signaling (30s Timeout, Auto-Forwarding & Attendance Tracking) ─
         socket.on('call_user', async ({ conversationId, targetUserId, roomId, callerName, callerPhoto, callType }) => {
             try {
                 const targetUidStr = String(targetUserId);
                 if (!targetUidStr || !targetUidStr.match(/^[0-9a-fA-F]{24}$/)) {
                     socket.emit('call_error', { message: 'Invalid call recipient' });
+                    return;
+                }
+
+                // Check recipient availability and blocked status
+                const [callerUser, targetUser] = await Promise.all([
+                    User.findById(userId).lean(),
+                    User.findById(targetUserId).lean()
+                ]);
+
+                if (!targetUser || targetUser.isDeleted || targetUser.isBlocked || targetUser.isActive === false) {
+                    socket.emit('call_error', { message: 'This host is currently unavailable or inactive.' });
                     return;
                 }
 
@@ -241,14 +354,10 @@ socket.on(
                     isActive: true
                 });
 
-                if (!activeMatch) {
-                    const [callerUser, targetUser] = await Promise.all([
-                        User.findById(userId).lean(),
-                        User.findById(targetUserId).lean()
-                    ]);
-                    const isCallerAgent = callerUser && (callerUser.isEliteAgent || callerUser.isStaff || callerUser.role === 'staff');
-                    const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff');
+                const isCallerAgent = callerUser && (callerUser.isEliteAgent || callerUser.isStaff || callerUser.role === 'staff');
+                const isTargetAgent = targetUser && (targetUser.isEliteAgent || targetUser.isStaff || targetUser.role === 'staff');
 
+                if (!activeMatch) {
                     if (isCallerAgent || isTargetAgent) {
                         activeMatch = await Match.create({ users: [userId, targetUserId] });
                         await User.updateMany({ _id: { $in: [userId, targetUserId] } }, { $inc: { matchesCount: 1 } });
@@ -260,38 +369,112 @@ socket.on(
                     return;
                 }
 
+                const sessionKey = `${userId}_${roomId}`;
+                
+                // Clear any previous session for this caller
+                if (activeCallSessions.has(sessionKey)) {
+                    const prev = activeCallSessions.get(sessionKey);
+                    if (prev.timer) clearTimeout(prev.timer);
+                    activeCallSessions.delete(sessionKey);
+                }
+
+                const callSession = {
+                    sessionKey,
+                    roomId,
+                    conversationId,
+                    callerId: String(userId),
+                    callerName: callerName || callerUser?.name || 'Inakkam User',
+                    callerPhoto: callerPhoto || callerUser?.photos?.[0]?.url || '',
+                    callType: callType || 'video',
+                    currentTargetAgentId: targetUidStr,
+                    attemptedAgents: new Set([targetUidStr]),
+                    timer: null
+                };
+
+                // Start 30-Second Call Timeout Timer
+                callSession.timer = setTimeout(() => {
+                    handleCallTimeoutOrDecline(io, sessionKey, targetUidStr, 'timeout');
+                }, 30000);
+
+                activeCallSessions.set(sessionKey, callSession);
+                if (roomId) activeCallSessions.set(roomId, callSession);
+
                 const callPayload = {
                     conversationId,
                     callerId: String(userId),
-                    callerName,
-                    callerPhoto,
+                    callerName: callSession.callerName,
+                    callerPhoto: callSession.callerPhoto,
                     roomId,
-                    callType
+                    callType: callSession.callType,
+                    timeout: 30
                 };
 
                 io.to(`user_${targetUidStr}`).emit('incoming_call', callPayload);
-                console.log(`📞 Socket: incoming_call emitted to user_${targetUidStr} (room=${roomId})`);
+                console.log(`📞 Socket: incoming_call (30s timer) emitted to user_${targetUidStr} (room=${roomId})`);
             } catch (err) {
                 socket.emit('call_error', { message: 'Failed to initiate call' });
                 console.error('[Socket call_user]', err);
             }
         });
 
-        socket.on('accept_call', ({ conversationId, callerId }) => {
-            const callerUidStr = String(callerId);
-            const acceptPayload = { conversationId, receiverId: String(userId) };
-            io.to(`user_${callerUidStr}`).emit('call_accepted', acceptPayload);
-            console.log(`📞 Socket: call_accepted emitted to user_${callerUidStr}`);
+        socket.on('accept_call', async ({ conversationId, callerId }) => {
+            try {
+                const callerUidStr = String(callerId);
+                const acceptPayload = { conversationId, receiverId: String(userId) };
+
+                // Find and clear any active call timer
+                for (const [key, s] of activeCallSessions.entries()) {
+                    if (String(s.currentTargetAgentId) === String(userId) || String(s.callerId) === callerUidStr) {
+                        if (s.timer) clearTimeout(s.timer);
+                        activeCallSessions.delete(key);
+                    }
+                }
+
+                // Reset consecutive missed calls for answering agent
+                await User.findByIdAndUpdate(userId, { consecutiveMissedCalls: 0 }).exec().catch(() => {});
+
+                io.to(`user_${callerUidStr}`).emit('call_accepted', acceptPayload);
+                console.log(`📞 Socket: call_accepted emitted to user_${callerUidStr} - Missed calls reset for user ${userId}`);
+            } catch (err) {
+                console.error('[Socket accept_call]', err);
+            }
         });
 
-        socket.on('reject_call', ({ conversationId, callerId }) => {
-            const callerUidStr = String(callerId);
-            const rejectPayload = { conversationId, receiverId: String(userId) };
-            io.to(`user_${callerUidStr}`).emit('call_rejected', rejectPayload);
-            console.log(`📞 Socket: call_rejected emitted to user_${callerUidStr}`);
+        socket.on('reject_call', async ({ conversationId, callerId }) => {
+            try {
+                const callerUidStr = String(callerId);
+                
+                // Find matching session
+                let matchedSessionKey = null;
+                for (const [key, s] of activeCallSessions.entries()) {
+                    if (String(s.currentTargetAgentId) === String(userId) || String(s.callerId) === callerUidStr) {
+                        matchedSessionKey = key;
+                        break;
+                    }
+                }
+
+                if (matchedSessionKey) {
+                    console.log(`📞 Socket: Call rejected by ${userId}. Auto-forwarding to next host...`);
+                    handleCallTimeoutOrDecline(io, matchedSessionKey, String(userId), 'declined');
+                } else {
+                    const rejectPayload = { conversationId, receiverId: String(userId) };
+                    io.to(`user_${callerUidStr}`).emit('call_rejected', rejectPayload);
+                    console.log(`📞 Socket: call_rejected emitted to user_${callerUidStr}`);
+                }
+            } catch (err) {
+                console.error('[Socket reject_call]', err);
+            }
         });
 
         socket.on('end_call', ({ conversationId, targetUserId }) => {
+            // Clean up any active session
+            for (const [key, s] of activeCallSessions.entries()) {
+                if (String(s.callerId) === String(userId) || String(s.currentTargetAgentId) === String(userId)) {
+                    if (s.timer) clearTimeout(s.timer);
+                    activeCallSessions.delete(key);
+                }
+            }
+
             const targetUidStr = String(targetUserId);
             const endPayload = { conversationId };
             io.to(`user_${targetUidStr}`).emit('call_ended', endPayload);

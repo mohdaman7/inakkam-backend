@@ -45,6 +45,7 @@ router.get('/elite-agents/:id', adminUserController.getEliteAgentById);
 router.put('/elite-agents/:id', adminUserController.updateEliteAgent);
 router.patch('/elite-agents/:id/status', adminUserController.toggleEliteAgentStatus);
 router.post('/elite-agents/:id/reset-password', adminUserController.resetEliteAgentPassword);
+router.put('/elite-agents/:id/reactivate', adminUserController.reactivateEliteAgent);
 
 // Interests
 router.get('/interests', adminInterestController.getInterests);

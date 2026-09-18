@@ -184,7 +184,7 @@ const getAgents = async (req, res, next) => {
         let agents = await User.find({
             _id: { $ne: req.user._id },
             $or: [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }],
-            isDeleted: { $ne: true }
+            isDeleted: { $ne: true }, isBlocked: { $ne: true }, isActive: { $ne: false }
         })
         .select('name age bio work education photos interests prompts zodiac height verified badges location lastActive isOnline isEliteAgent isStaff role gender wallet')
         .sort({ isOnline: -1, lastActive: -1 })

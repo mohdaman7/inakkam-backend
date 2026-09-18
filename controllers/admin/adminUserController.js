@@ -61,7 +61,7 @@ const toggleBlockUser = async (req, res, next) => {
 const getEliteAgents = async (req, res, next) => {
     try {
         const agents = await User.find({ isEliteAgent: true })
-            .select('name email phone gender dob state city religion languages photos interests membership verified verificationStatus isOnline isDeleted createdAt wallet occupation payoutDetails')
+            .select('name email phone gender dob state city religion languages photos interests membership verified verificationStatus isOnline isDeleted isActive isBlocked blockedReason consecutiveMissedCalls createdAt wallet occupation payoutDetails')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -83,7 +83,11 @@ const getEliteAgents = async (req, res, next) => {
             verificationStatus: u.verificationStatus || 'NOT_VERIFIED',
             isOnline: !!u.isOnline,
             isDeleted: !!u.isDeleted,
-            status: u.isDeleted ? 'Suspended' : 'Active',
+            status: u.isBlocked ? 'Blocked' : (u.isDeleted ? 'Suspended' : 'Active'),
+            isActive: u.isActive !== false && !u.isBlocked,
+            isBlocked: !!u.isBlocked,
+            blockedReason: u.blockedReason || '',
+            consecutiveMissedCalls: u.consecutiveMissedCalls || 0,
             createdAt: new Date(u.createdAt).toLocaleDateString(),
             occupation: u.occupation || '',
             wallet: u.wallet || {
@@ -348,6 +352,32 @@ const resetEliteAgentPassword = async (req, res, next) => {
     }
 };
 
+// @desc    Reactivate Elite Agent and reset missed calls
+// @route   PUT /api/admin/elite-agents/:id/reactivate
+const reactivateEliteAgent = async (req, res, next) => {
+    try {
+        const agent = await User.findById(req.params.id);
+        if (!agent || !agent.isEliteAgent) {
+            return res.status(404).json({ success: false, message: 'Elite Agent not found' });
+        }
+
+        agent.isBlocked = false;
+        agent.isActive = true;
+        agent.consecutiveMissedCalls = 0;
+        agent.blockedReason = '';
+        agent.isDeleted = false;
+        await agent.save();
+
+        return res.json({
+            success: true,
+            message: `Elite Agent ${agent.name} has been reactivated successfully`,
+            agent
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     getUsers,
     toggleBlockUser,
@@ -356,5 +386,6 @@ module.exports = {
     getEliteAgentById,
     updateEliteAgent,
     toggleEliteAgentStatus,
-    resetEliteAgentPassword
+    resetEliteAgentPassword,
+    reactivateEliteAgent
 };
