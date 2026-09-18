@@ -57,21 +57,38 @@ const normalizeSpokenNumbers = (rawText = '') => {
     return converted.join(' ');
 };
 
+const recentSpeechByUser = new Map(); // userId -> [{ text, time }]
+
+const appendAndGetRollingTranscript = (userId, newText) => {
+    if (!userId || !newText) return newText || '';
+    const now = Date.now();
+    const key = String(userId);
+    let history = recentSpeechByUser.get(key) || [];
+    history.push({ text: newText.trim(), time: now });
+    // Keep entries from the last 15 seconds
+    history = history.filter((item) => now - item.time < 15000);
+    recentSpeechByUser.set(key, history);
+    return history.map((h) => h.text).join(' ');
+};
+
 const checkSpokenPhoneNumber = (rawTranscript = '') => {
     if (!rawTranscript || typeof rawTranscript !== 'string') {
         return { detected: false };
     }
 
-    const normalized = normalizeSpokenNumbers(rawTranscript);
+    const cleanTranscript = rawTranscript.trim();
+    if (!cleanTranscript) return { detected: false };
+
+    const normalized = normalizeSpokenNumbers(cleanTranscript);
 
     // 1. Direct 10-digit Indian phone numbers (+91 or starting with 6-9)
     const phonePattern = /(?:(?:\+|0{0,2})91[\s.-]?)?[6-9]\d{9}/;
-    const phoneMatch = normalized.replace(/\s+/g, '').match(phonePattern);
+    const phoneMatch = normalized.replace(/[\s.-]+/g, '').match(phonePattern);
     if (phoneMatch) {
         return { detected: true, match: phoneMatch[0], reason: 'indian_mobile_number' };
     }
 
-    // 2. Sequence of 7 or more consecutive digits
+    // 2. Sequence of 7 or more consecutive digits anywhere in normalized stream
     const digitsOnly = normalized.replace(/[^\d]/g, '');
     if (digitsOnly.length >= 7) {
         return { detected: true, match: digitsOnly, reason: 'consecutive_digits_stream' };
@@ -86,9 +103,17 @@ const checkSpokenPhoneNumber = (rawTranscript = '') => {
             if (consecutiveDigits >= 7) {
                 return { detected: true, match: words.join(' '), reason: 'spoken_digit_sequence' };
             }
-        } else if (!['and', 'is', 'my', 'number', 'call', 'whatsapp'].includes(w)) {
+        } else if (!['and', 'is', 'my', 'number', 'call', 'whatsapp', 'phone', 'mobile'].includes(w)) {
             consecutiveDigits = 0;
         }
+    }
+
+    // 4. Intent keywords with 6 or more digits (e.g. "call me 984765")
+    const intentWords = ['call', 'call me', 'whatsapp', 'number', 'phone', 'contact', 'mobile', 'dial'];
+    const lower = normalized.toLowerCase();
+    const hasIntent = intentWords.some((kw) => lower.includes(kw));
+    if (hasIntent && digitsOnly.length >= 6) {
+        return { detected: true, match: digitsOnly, reason: 'intent_with_digits' };
     }
 
     return { detected: false };
@@ -122,10 +147,12 @@ const processAudioChunk = async (pcmBuffer, { roomId, conversationId, userId, ta
         }
 
         const avgEnergy = energy / numSamples;
-        // Silence detection threshold: skip running Whisper on background silence
-        if (avgEnergy < 0.015) {
+        // Silence detection threshold: skip running Whisper on background silence (<0.002)
+        if (avgEnergy < 0.002) {
             return { detected: false };
         }
+
+        console.log(`🔊 [AudioSecurity] Analyzing audio chunk for user ${userId} (${numSamples} samples, energy: ${avgEnergy.toFixed(4)})`);
 
         const transcriber = await getTranscriber();
         const result = await transcriber(float32);
@@ -135,7 +162,13 @@ const processAudioChunk = async (pcmBuffer, { roomId, conversationId, userId, ta
 
         console.log(`🎙️ [AudioSecurity] Spoken by user ${userId}: "${transcript}"`);
 
-        const phoneCheck = checkSpokenPhoneNumber(transcript);
+        // Check both immediate chunk and rolling 15s transcript window (for paused numbers)
+        const immediateCheck = checkSpokenPhoneNumber(transcript);
+        const rollingTranscript = appendAndGetRollingTranscript(userId, transcript);
+        const rollingCheck = immediateCheck.detected ? immediateCheck : checkSpokenPhoneNumber(rollingTranscript);
+
+        const phoneCheck = rollingCheck.detected ? rollingCheck : immediateCheck;
+
         if (phoneCheck.detected) {
             console.warn(`🚨 [AudioSecurity] Phone number detected in spoken audio from user ${userId}!`, phoneCheck);
 
@@ -156,12 +189,14 @@ const processAudioChunk = async (pcmBuffer, { roomId, conversationId, userId, ta
                 io.to(`user_${targetUidStr}`).emit('call_audio_security_block', blockPayload);
             }
 
-            // 3. Broadcast to call room
+            // 3. Broadcast to call room using both socket and io
             if (roomId) {
                 socket.to(String(roomId)).emit('call_audio_security_block', blockPayload);
+                io.to(String(roomId)).emit('call_audio_security_block', blockPayload);
             }
             if (conversationId && String(conversationId) !== String(roomId)) {
                 socket.to(String(conversationId)).emit('call_audio_security_block', blockPayload);
+                io.to(String(conversationId)).emit('call_audio_security_block', blockPayload);
             }
 
             return { detected: true, transcript, match: phoneCheck.match };
