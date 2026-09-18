@@ -29,6 +29,7 @@ const { Server } = require('socket.io');
 const app = require('./app');
 const connectDB = require('./config/db');
 const chatSocket = require('./sockets/chatSocket');
+const { initChatAutoCleaner } = require('./services/chatCleanupService');
 
 const DEFAULT_PORT = 7000;
 const basePort = Number(process.env.PORT) || DEFAULT_PORT;
@@ -79,6 +80,7 @@ server.on('error', (err) => {
 const startServer = async () => {
     try {
         await connectDB();
+        initChatAutoCleaner();
         server.listen(currentPort, () => {
             console.log(`\n🚀 Inakkam API running at http://localhost:${currentPort}`);
             console.log(`🔌 Socket.io listening on ws://localhost:${currentPort}`);

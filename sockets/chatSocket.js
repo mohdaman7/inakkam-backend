@@ -167,6 +167,7 @@ socket.on(
                     sender: userId,
                     text: text.trim(),
                     readBy: [userId],
+                    expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
                 });
 
                 conversation.lastMessage = message._id;
@@ -432,6 +433,7 @@ socket.on(
                             sender: userId,
                             text: actualType === 'gif' ? (actualGifUrl || chatText) : chatText,
                             readBy: [userId],
+                            expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
                         });
                         await Conversation.findByIdAndUpdate(conversationId, {
                             lastMessage: savedMsg._id,

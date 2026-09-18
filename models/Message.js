@@ -13,5 +13,6 @@ const messageSchema = new mongoose.Schema({
 
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
 
 module.exports = mongoose.model('Message', messageSchema);

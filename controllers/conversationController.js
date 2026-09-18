@@ -36,6 +36,7 @@ const getConversations = async (req, res, next) => {
 
         const seenUsers = new Set();
         const formatted = [];
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
         for (const c of conversations) {
             const otherUser = c.participants.find((p) => p && p._id.toString() !== req.user._id.toString());
@@ -45,12 +46,16 @@ const getConversations = async (req, res, next) => {
             if (seenUsers.has(otherUserId)) continue;
             seenUsers.add(otherUserId);
 
+            // Only expose lastMessage and lastMessageAt if within 24 hours
+            const isLastMsgValid = c.lastMessage && c.lastMessage.createdAt && new Date(c.lastMessage.createdAt) >= cutoff;
+            const isLastMsgAtValid = c.lastMessageAt && new Date(c.lastMessageAt) >= cutoff;
+
             formatted.push({
                 conversationId: c._id,
                 matchId: c.match,
                 user: otherUser,
-                lastMessage: c.lastMessage,
-                lastMessageAt: c.lastMessageAt,
+                lastMessage: isLastMsgValid ? c.lastMessage : null,
+                lastMessageAt: isLastMsgAtValid ? c.lastMessageAt : null,
                 updatedAt: c.updatedAt,
             });
         }
@@ -139,8 +144,12 @@ const getMessages = async (req, res, next) => {
         const convId = conversation._id;
         const { page = 1, limit = 30 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-        const messages = await Message.find({ conversation: convId })
+        const messages = await Message.find({
+            conversation: convId,
+            createdAt: { $gte: cutoff }
+        })
             .populate('sender', 'name photos')
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -205,6 +214,7 @@ const sendMessage = async (req, res, next) => {
             sender: req.user._id,
             text: text.trim(),
             readBy: [req.user._id],
+            expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
 
         conversation.lastMessage = message._id;
