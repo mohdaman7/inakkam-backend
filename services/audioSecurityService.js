@@ -88,19 +88,19 @@ const checkSpokenPhoneNumber = (rawTranscript = '') => {
         return { detected: true, match: phoneMatch[0], reason: 'indian_mobile_number' };
     }
 
-    // 2. Sequence of 7 or more consecutive digits anywhere in normalized stream
+    // 2. Sequence of 5 or more consecutive digits anywhere in normalized stream (instant cutoff)
     const digitsOnly = normalized.replace(/[^\d]/g, '');
-    if (digitsOnly.length >= 7) {
+    if (digitsOnly.length >= 5) {
         return { detected: true, match: digitsOnly, reason: 'consecutive_digits_stream' };
     }
 
-    // 3. Spoken digit words sequence (e.g. "nine eight four seven six five four")
+    // 3. Spoken digit words sequence (5 or more digits in a row)
     const words = normalized.toLowerCase().split(/\s+/);
     let consecutiveDigits = 0;
     for (const w of words) {
         if (/^\d$/.test(w) || DIGIT_WORDS[w] !== undefined) {
             consecutiveDigits += 1;
-            if (consecutiveDigits >= 7) {
+            if (consecutiveDigits >= 5) {
                 return { detected: true, match: words.join(' '), reason: 'spoken_digit_sequence' };
             }
         } else if (!['and', 'is', 'my', 'number', 'call', 'whatsapp', 'phone', 'mobile'].includes(w)) {
@@ -108,11 +108,11 @@ const checkSpokenPhoneNumber = (rawTranscript = '') => {
         }
     }
 
-    // 4. Intent keywords with 6 or more digits (e.g. "call me 984765")
-    const intentWords = ['call', 'call me', 'whatsapp', 'number', 'phone', 'contact', 'mobile', 'dial'];
+    // 4. Intent keywords with 3 or more digits (e.g. "call me 984", "my number 984")
+    const intentWords = ['call', 'call me', 'whatsapp', 'number', 'phone', 'contact', 'mobile', 'dial', 'reach me', 'gpay', 'paytm', 'no'];
     const lower = normalized.toLowerCase();
     const hasIntent = intentWords.some((kw) => lower.includes(kw));
-    if (hasIntent && digitsOnly.length >= 6) {
+    if (hasIntent && digitsOnly.length >= 3) {
         return { detected: true, match: digitsOnly, reason: 'intent_with_digits' };
     }
 
