@@ -65,16 +65,21 @@ const purchaseCoins = async (req, res, next) => {
     }
 };
 
-// @desc    Submit a UPI QR coin recharge request with payment screenshot
+// @desc    Submit a coin recharge request (in-app screenshot or WhatsApp)
 // @route   POST /api/coins/request
 const submitCoinRequest = async (req, res, next) => {
     try {
-        const { coins, amount, packageId, packageType, minutes, screenshotUrl, utrNumber } = req.body;
+        const {
+            coins, amount, packageId, packageType, minutes,
+            screenshotUrl, utrNumber,
+            paymentMethod, submittedViaWhatsapp
+        } = req.body;
 
         if (!coins || !amount) {
             return res.status(400).json({ success: false, message: 'coins and amount are required' });
         }
-        if (!screenshotUrl) {
+        // Screenshot required only if NOT submitted via WhatsApp
+        if (!screenshotUrl && !submittedViaWhatsapp) {
             return res.status(400).json({ success: false, message: 'Payment screenshot is required' });
         }
 
@@ -94,15 +99,19 @@ const submitCoinRequest = async (req, res, next) => {
             packageId: packageId || 'custom',
             packageType: packageType || 'recharge',
             minutes: minutes || null,
-            screenshotUrl,
+            screenshotUrl: screenshotUrl || '',
             utrNumber: utrNumber || '',
+            paymentMethod: paymentMethod || 'other',
+            submittedViaWhatsapp: !!submittedViaWhatsapp,
             status: 'pending'
         });
 
         return res.status(201).json({
             success: true,
             requestId: coinRequest._id,
-            message: 'Coin request submitted successfully! Your coins will be credited within 30 minutes.'
+            message: submittedViaWhatsapp
+                ? 'Request logged! Please send your screenshot on WhatsApp. Coins will be credited after verification.'
+                : 'Coin request submitted! Your coins will be credited within 30 minutes after verification.'
         });
     } catch (err) {
         next(err);
@@ -458,3 +467,4 @@ module.exports = {
     deductCallCoin,
     sendGift
 };
+
