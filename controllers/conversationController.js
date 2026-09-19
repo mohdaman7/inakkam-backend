@@ -60,6 +60,7 @@ const getConversations = async (req, res, next) => {
             });
         }
 
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res.json({ success: true, conversations: formatted });
     } catch (err) {
         next(err);
@@ -176,6 +177,7 @@ const getMessages = async (req, res, next) => {
             { $addToSet: { readBy: req.user._id } }
         );
 
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res.json({ success: true, conversationId: convId, messages: uniqueMessages.reverse(), page: parseInt(page) });
     } catch (err) {
         next(err);
@@ -223,11 +225,15 @@ const sendMessage = async (req, res, next) => {
 
         const populated = await message.populate('sender', 'name photos');
 
+        const otherParticipant = conversation.participants ? conversation.participants.find(p => p.toString() !== req.user._id.toString()) : null;
+        const recipientId = otherParticipant ? otherParticipant.toString() : '';
+
         // Broadcast real-time message via Socket.IO if available
         const io = req.app.get('io');
         if (io) {
             const messagePayload = {
                 ...populated.toObject(),
+                recipientId,
                 conversationId: conversation._id.toString(),
                 conversation: conversation._id.toString(),
             };

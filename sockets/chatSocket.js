@@ -281,6 +281,7 @@ socket.on(
                 const messagePayload = {
                     ...populated,
                     tempId,
+                    recipientId: targetUserId ? String(targetUserId) : undefined,
                     conversationId: conversation._id.toString(),
                     conversation: conversation._id.toString(),
                 };
