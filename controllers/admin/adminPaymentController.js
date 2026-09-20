@@ -18,7 +18,7 @@ const getPaymentGateways = async (req, res, next) => {
 const getPayouts = async (req, res, next) => {
     try {
         const payouts = await Payout.find()
-            .populate('userId', 'name email phone')
+            .populate('userId', 'name email phone payoutDetails')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -39,6 +39,18 @@ const processPayout = async (req, res, next) => {
 
         payout.status = 'Completed';
         await payout.save();
+
+        // Settle wallet balances for the user if linked
+        if (payout.userId) {
+            const User = require('../../models/User');
+            const user = await User.findById(payout.userId);
+            if (user && user.wallet) {
+                user.wallet.pendingPayout = Math.max(0, (user.wallet.pendingPayout || 0) - (payout.amount || 0));
+                user.wallet.paidAmount = (user.wallet.paidAmount || 0) + (payout.amount || 0);
+                user.wallet.lifetimeEarnings = (user.wallet.lifetimeEarnings || 0) + (payout.amount || 0);
+                await user.save();
+            }
+        }
 
         return res.json({ success: true, payout, message: 'Payout marked as completed' });
     } catch (err) {

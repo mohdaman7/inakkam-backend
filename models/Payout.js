@@ -7,6 +7,13 @@ const payoutSchema = new mongoose.Schema({
     coin: { type: Number, required: true },
     transferType: { type: String, required: true, enum: ['UPI', 'Bank', 'PayPal', 'Razorpay'] },
     mobile: { type: String, default: '' },
+    payoutDetails: {
+        upiId: { type: String, default: '' },
+        bankName: { type: String, default: '' },
+        accountNumber: { type: String, default: '' },
+        ifsc: { type: String, default: '' },
+        accountHolderName: { type: String, default: '' }
+    },
     status: { type: String, enum: ['Pending', 'Completed'], default: 'Pending' },
 }, { timestamps: true });
 
