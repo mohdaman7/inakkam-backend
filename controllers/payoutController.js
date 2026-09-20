@@ -47,6 +47,13 @@ const requestPayout = async (req, res, next) => {
             coin: requestedCoins,
             transferType: transferType || (upiId ? 'UPI' : 'Bank'),
             mobile: user.phone || '',
+            payoutDetails: {
+                upiId: upiId || user.payoutDetails?.upiId || '',
+                bankName: bankName || user.payoutDetails?.bankName || '',
+                accountNumber: accountNumber || user.payoutDetails?.accountNumber || '',
+                ifsc: ifsc || user.payoutDetails?.ifsc || '',
+                accountHolderName: user.name || ''
+            },
             status: 'Pending'
         });
 
@@ -95,7 +102,35 @@ const getMyPayouts = async (req, res, next) => {
     }
 };
 
+// @desc    Update staff payout details (bank / UPI)
+// @route   PUT /api/payout/details
+// @route   POST /api/payout/details
+const updatePayoutDetails = async (req, res, next) => {
+    try {
+        const { bankName, accountNumber, ifsc, upiId } = req.body;
+        const user = await User.findById(req.user._id);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (!user.payoutDetails) user.payoutDetails = {};
+        if (bankName !== undefined) user.payoutDetails.bankName = bankName;
+        if (accountNumber !== undefined) user.payoutDetails.accountNumber = accountNumber;
+        if (ifsc !== undefined) user.payoutDetails.ifsc = ifsc;
+        if (upiId !== undefined) user.payoutDetails.upiId = upiId;
+
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Payout details updated successfully',
+            payoutDetails: user.payoutDetails
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     requestPayout,
-    getMyPayouts
+    getMyPayouts,
+    updatePayoutDetails
 };
