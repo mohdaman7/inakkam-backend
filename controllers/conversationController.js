@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const Match = require('../models/Match');
@@ -195,10 +196,21 @@ const sendMessage = async (req, res, next) => {
         const isSenderStaff = req.user && (req.user.isEliteAgent || req.user.isStaff || req.user.role === 'staff' || req.user.role === 'admin');
         const isCustomer = !isSenderStaff;
 
-        if (isCustomer && text.trim().length > 20) {
+        const isGifUrl = (str) => {
+            if (!str || typeof str !== 'string') return false;
+            const s = str.trim();
+            return (s.startsWith('http://') || s.startsWith('https://')) &&
+                (s.includes('giphy') || s.includes('tenor') || s.includes('.gif') || s.includes('.webp') || s.includes('/media/'));
+        };
+        const countWords = (str) => {
+            if (!str || typeof str !== 'string') return 0;
+            return str.trim().split(/\s+/).filter(Boolean).length;
+        };
+
+        if (isCustomer && countWords(text) > 20 && !isGifUrl(text)) {
             return res.status(400).json({
                 success: false,
-                message: 'Customer messages cannot exceed 20 characters.'
+                message: 'Customer messages cannot exceed 20 words.'
             });
         }
 
@@ -262,10 +274,15 @@ const deleteMessage = async (req, res, next) => {
         const { id: conversationId, messageId } = req.params;
         const currentUserId = req.user._id;
 
+        // If messageId is a temporary client-side ID or invalid MongoDB ObjectId
+        if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+            return res.json({ success: true, message: 'Message removed' });
+        }
+
         // Find the message
         const message = await Message.findById(messageId);
         if (!message) {
-            return res.status(404).json({ success: false, message: 'Message not found' });
+            return res.json({ success: true, message: 'Message already deleted' });
         }
 
         // Check if the user is the sender of the message
@@ -273,14 +290,23 @@ const deleteMessage = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Unauthorized to delete this message' });
         }
 
+        const convId = message.conversation;
+
         // Delete the message
         await Message.deleteOne({ _id: messageId });
 
         // Update the conversation's last message if this was the last message
-        const conversation = await Conversation.findById(conversationId);
+        let conversation = null;
+        if (convId) {
+            conversation = await Conversation.findById(convId);
+        }
+        if (!conversation && mongoose.Types.ObjectId.isValid(conversationId)) {
+            conversation = await Conversation.findById(conversationId);
+        }
+
         if (conversation && conversation.lastMessage && conversation.lastMessage.toString() === messageId) {
             // Find the new last message
-            const newLastMessage = await Message.findOne({ conversation: conversationId })
+            const newLastMessage = await Message.findOne({ conversation: conversation._id })
                 .sort({ createdAt: -1 });
 
             if (newLastMessage) {
@@ -296,7 +322,21 @@ const deleteMessage = async (req, res, next) => {
         // Emit the socket event to delete the message on the frontend for all room members
         const io = req.app.get('io');
         if (io) {
-            io.to(conversationId).emit('message_deleted', { conversationId, messageId });
+            const emitPayload = { conversationId: convId ? convId.toString() : conversationId, messageId };
+            if (convId) {
+                io.to(convId.toString()).emit('message_deleted', emitPayload);
+            }
+            if (conversationId && conversationId !== convId?.toString()) {
+                io.to(conversationId).emit('message_deleted', emitPayload);
+            }
+            if (conversation && Array.isArray(conversation.participants)) {
+                conversation.participants.forEach(p => {
+                    const pidStr = p ? p.toString() : '';
+                    if (pidStr) {
+                        io.to(`user_${pidStr}`).emit('message_deleted', emitPayload);
+                    }
+                });
+            }
         }
 
         return res.json({ success: true, message: 'Message deleted successfully' });

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Match = require('../models/Match');
@@ -207,8 +208,13 @@ socket.on(
                 };
 
                 // Validate 20-character limit for customer messages (GIFs & media URLs are exempt)
-                if (isCustomer && text.trim().length > 20 && !isGifUrl(text.trim())) {
-                    socket.emit('message_error', { tempId, message: 'Customer messages cannot exceed 20 characters.' });
+                // Validate 20-word limit for customer messages (GIFs & media URLs are exempt)
+                const countWords = (str) => {
+                    if (!str || typeof str !== 'string') return 0;
+                    return str.trim().split(/\s+/).filter(Boolean).length;
+                };
+                if (isCustomer && countWords(text) > 20 && !isGifUrl(text.trim())) {
+                    socket.emit('message_error', { tempId, message: 'Customer messages cannot exceed 20 words.' });
                     return;
                 }
 
@@ -317,6 +323,55 @@ socket.on(
         });
 
         // Message read receipt
+        
+        // Message deletion via socket
+        socket.on('delete_message', async ({ conversationId, messageId }) => {
+            try {
+                if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+                    socket.emit('message_deleted', { conversationId, messageId });
+                    return;
+                }
+                const message = await Message.findById(messageId);
+                if (!message) {
+                    socket.emit('message_deleted', { conversationId, messageId });
+                    return;
+                }
+                if (message.sender.toString() !== userId.toString()) {
+                    socket.emit('message_error', { message: 'Unauthorized to delete this message' });
+                    return;
+                }
+                const convId = message.conversation;
+                await Message.deleteOne({ _id: messageId });
+
+                let conversation = null;
+                if (convId) {
+                    conversation = await Conversation.findById(convId);
+                }
+                if (conversation && conversation.lastMessage && conversation.lastMessage.toString() === messageId) {
+                    const newLastMessage = await Message.findOne({ conversation: conversation._id }).sort({ createdAt: -1 });
+                    if (newLastMessage) {
+                        conversation.lastMessage = newLastMessage._id;
+                        conversation.lastMessageAt = newLastMessage.createdAt;
+                    } else {
+                        conversation.lastMessage = null;
+                        conversation.lastMessageAt = null;
+                    }
+                    await conversation.save();
+                }
+
+                const emitPayload = { conversationId: convId ? convId.toString() : conversationId, messageId };
+                if (convId) io.to(convId.toString()).emit('message_deleted', emitPayload);
+                if (conversationId && conversationId !== convId?.toString()) io.to(conversationId).emit('message_deleted', emitPayload);
+                if (conversation && Array.isArray(conversation.participants)) {
+                    conversation.participants.forEach(p => {
+                        const pidStr = p ? p.toString() : '';
+                        if (pidStr) io.to(`user_${pidStr}`).emit('message_deleted', emitPayload);
+                    });
+                }
+            } catch (err) {
+                console.error('[Socket delete_message] error:', err);
+            }
+        });
         socket.on('message_read', async ({ conversationId }) => {
             try {
                 await Message.updateMany(
@@ -584,8 +639,11 @@ socket.on(
                         chatText = '[🛡️ Phone number removed for privacy]';
                     }
 
-                    if (!isSenderStaff && chatText && chatText.length > 20 && !containsPhone && !isMediaOrGif(chatText)) {
-                        chatText = chatText.slice(0, 20);
+                    if (!isSenderStaff && chatText && !containsPhone && !isMediaOrGif(chatText)) {
+                        const words = chatText.trim().split(/\s+/).filter(Boolean);
+                        if (words.length > 20) {
+                            chatText = words.slice(0, 20).join(' ');
+                        }
                     }
                 }
 
