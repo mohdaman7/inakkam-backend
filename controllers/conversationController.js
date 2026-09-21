@@ -30,7 +30,7 @@ const getConversations = async (req, res, next) => {
         const conversations = await Conversation.find({
             participants: req.user._id,
         })
-            .populate('participants', 'name photos isOnline lastActive verified')
+            .populate('participants', 'name photos isOnline lastActive verified isEliteAgent isStaff role')
             .populate('lastMessage', 'text createdAt sender')
             .sort({ lastMessageAt: -1 })
             .lean();
@@ -45,6 +45,13 @@ const getConversations = async (req, res, next) => {
 
             const otherUserId = otherUser._id.toString();
             if (seenUsers.has(otherUserId)) continue;
+
+            // Strict Separation: Agent sees only Customers; Customer sees only Agents
+            const isMeAgent = Boolean(req.user && (req.user.isEliteAgent || req.user.isStaff || req.user.role === 'staff' || req.user.role === 'admin'));
+            const isOtherAgent = Boolean(otherUser.isEliteAgent || otherUser.isStaff || otherUser.role === 'staff' || otherUser.role === 'admin');
+            if (isMeAgent && isOtherAgent) continue;
+            if (!isMeAgent && !isOtherAgent) continue;
+
             seenUsers.add(otherUserId);
 
             // Only expose lastMessage and lastMessageAt if within 24 hours

@@ -11,19 +11,26 @@ const getMatches = async (req, res, next) => {
             users: req.user._id,
             isActive: true,
         })
-            .populate('users', 'name age photos isOnline lastActive verified badges')
+            .populate('users', 'name age photos isOnline lastActive verified badges isEliteAgent isStaff role')
             .sort({ createdAt: -1 })
             .lean();
 
-        // Format: return the "other" user in each match
-        const formatted = matches.map((m) => {
-            const otherUser = m.users.find((u) => u._id.toString() !== req.user._id.toString());
-            return {
-                matchId: m._id,
-                matchedAt: m.createdAt,
-                user: otherUser,
-            };
-        });
+        const isMeAgent = Boolean(req.user && (req.user.isEliteAgent || req.user.isStaff || req.user.role === 'staff' || req.user.role === 'admin'));
+
+        const formatted = matches
+            .map((m) => {
+                const otherUser = m.users.find((u) => u && u._id.toString() !== req.user._id.toString());
+                if (!otherUser) return null;
+                const isOtherAgent = Boolean(otherUser.isEliteAgent || otherUser.isStaff || otherUser.role === 'staff' || otherUser.role === 'admin');
+                if (isMeAgent && isOtherAgent) return null; // Agent cannot match with another agent
+                if (!isMeAgent && !isOtherAgent) return null; // Customer cannot match with another customer
+                return {
+                    matchId: m._id,
+                    matchedAt: m.createdAt,
+                    user: otherUser,
+                };
+            })
+            .filter(Boolean);
 
         return res.json({ success: true, matches: formatted });
     } catch (err) {

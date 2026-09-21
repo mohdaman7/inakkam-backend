@@ -4,7 +4,11 @@ const User = require('../../models/User');
 // @route   GET /api/admin/users
 const getUsers = async (req, res, next) => {
     try {
-        const users = await User.find({ isEliteAgent: { $ne: true } })
+        const users = await User.find({
+            isEliteAgent: { $ne: true },
+            isStaff: { $ne: true },
+            role: { $nin: ['staff', 'admin'] }
+        })
             .select('name email phone gender age bio work education photos interests membership verified verificationStatus isOnline isDeleted createdAt')
             .sort({ createdAt: -1 })
             .lean();

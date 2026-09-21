@@ -53,12 +53,25 @@ const getDiscover = async (req, res, next) => {
         // Exclude: self, already-swiped, blocked
         const excludedIds = [me._id, ...swipedIds, ...(me.blockedUsers || [])];
 
+        const isMeAgent = Boolean(me && (me.isEliteAgent || me.isStaff || me.role === 'staff' || me.role === 'admin'));
+
         const filter = {
             _id: { $nin: excludedIds },
             isDeleted: { $ne: true },
             isBlocked: { $ne: true },
             isActive: { $ne: false },
         };
+
+        // Strict Role Separation:
+        // Customer PWA users ONLY discover verified Agents/Hosts
+        // Agents ONLY discover real Customers
+        if (!isMeAgent) {
+            filter.$or = [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }];
+        } else {
+            filter.isEliteAgent = { $ne: true };
+            filter.isStaff = { $ne: true };
+            filter.role = { $nin: ['staff', 'admin'] };
+        }
 
         // Flexible gender preference matching
         if (me.interestedIn && me.interestedIn.length > 0) {
@@ -92,7 +105,16 @@ const getDiscover = async (req, res, next) => {
             const fallbackFilter = {
                 _id: { $ne: me._id },
                 isDeleted: { $ne: true },
+                isBlocked: { $ne: true },
+                isActive: { $ne: false }
             };
+            if (!isMeAgent) {
+                fallbackFilter.$or = [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }];
+            } else {
+                fallbackFilter.isEliteAgent = { $ne: true };
+                fallbackFilter.isStaff = { $ne: true };
+                fallbackFilter.role = { $nin: ['staff', 'admin'] };
+            }
             const fallbackUsers = await User.find(fallbackFilter)
                 .select('name age bio work education photos interests prompts zodiac height exercise relationship religion languages verified badges location lastActive isOnline isEliteAgent isStaff role gender')
                 .sort({ isEliteAgent: -1, isStaff: -1, isOnline: -1, lastActive: -1 })

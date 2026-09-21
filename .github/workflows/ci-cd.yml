@@ -1,0 +1,54 @@
+name: Inakkam Core Backend CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-verify:
+    name: Node.js Syntax & Health Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Validate Server & Controllers Syntax
+        run: |
+          node -c server.js
+          node -c app.js
+          node -c sockets/chatSocket.js
+          for f in controllers/*.js; do [ -f "$f" ] && node -c "$f"; done
+          for f in controllers/admin/*.js; do [ -f "$f" ] && node -c "$f"; done
+          for f in routes/*.js; do [ -f "$f" ] && node -c "$f"; done
+          for f in models/*.js; do [ -f "$f" ] && node -c "$f"; done
+          echo "All Node.js backend syntax validations passed!"
+
+  deploy:
+    name: Deploy Core Backend
+    needs: test-and-verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Backend Deployment Notification
+        run: |
+          echo "Backend syntax verified and ready for deployment."
+          echo "Target deployment: PM2 / Docker Container / Cloud Service."

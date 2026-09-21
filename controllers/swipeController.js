@@ -132,7 +132,7 @@ const getReceivedLikes = async (req, res, next) => {
             swiped: me._id,
             action: { $in: ['right', 'superlike'] }
         })
-            .populate('swiper', 'name age photos bio location work education height weight occupation city state verified badges isOnline lastActive')
+            .populate('swiper', 'name age photos bio location work education height weight occupation city state verified badges isOnline lastActive isEliteAgent isStaff role')
             .sort({ createdAt: -1 })
             .lean();
 

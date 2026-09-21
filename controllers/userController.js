@@ -191,10 +191,11 @@ const getAgents = async (req, res, next) => {
         .limit(20)
         .lean();
 
-        // If no explicit agents exist yet in DB, fallback to top active users to ensure UI is rich
+        // Fallback only queries agents/staff, NEVER regular customers
         if (!agents || agents.length === 0) {
             agents = await User.find({
                 _id: { $ne: req.user._id },
+                $or: [{ isEliteAgent: true }, { isStaff: true }, { role: 'staff' }],
                 isDeleted: { $ne: true }
             })
             .select('name age bio work education photos interests prompts zodiac height verified badges location lastActive isOnline isEliteAgent isStaff role gender wallet')
