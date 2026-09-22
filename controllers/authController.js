@@ -5,6 +5,7 @@ const Admin = require('../models/Admin');
 const Notification = require('../models/Notification');
 const { sendEmail } = require('../utils/sendEmail');
 const { sendSms } = require('../utils/sendSms');
+const { verifyFirebaseIdToken } = require('../config/firebaseAdmin');
 
 // Simple in-memory store for OTPs during development
 const otpStore = new Map();
@@ -420,4 +421,134 @@ const verifyOtp = async (req, res, next) => {
     }
 };
 
-module.exports = { register, login, refreshToken, logout, forgotPassword, resetPassword, sendOtp, verifyOtp };
+// @desc    Verify Firebase ID Token (for Onboarding phone verification)
+// @route   POST /api/auth/firebase-verify
+// @access  Public / Optional Protect
+const verifyFirebaseToken = async (req, res, next) => {
+    try {
+        const { idToken, phone } = req.body;
+        if (!idToken) {
+            return res.status(400).json({ success: false, message: 'Firebase ID Token is required' });
+        }
+
+        const decoded = await verifyFirebaseIdToken(idToken);
+        const verifiedPhone = decoded.phone_number || phone;
+
+        if (!verifiedPhone) {
+            return res.status(400).json({ success: false, message: 'No verified phone number found in token' });
+        }
+
+        // If user is currently authenticated in session (e.g. during Onboarding)
+        if (req.user) {
+            const updatedUser = await User.findByIdAndUpdate(
+                req.user._id,
+                { phone: verifiedPhone },
+                { new: true }
+            );
+            return res.json({
+                success: true,
+                message: 'Phone number verified and updated successfully',
+                phone: verifiedPhone,
+                user: updatedUser
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Firebase token verified successfully',
+            phone: verifiedPhone,
+            firebaseUid: decoded.uid
+        });
+    } catch (err) {
+        console.error('[verifyFirebaseToken] Error:', err.message);
+        return res.status(401).json({
+            success: false,
+            message: err.message || 'Firebase token verification failed'
+        });
+    }
+};
+
+// @desc    Sign in or sign up user using verified Firebase phone token
+// @route   POST /api/auth/firebase-login
+// @access  Public
+const firebasePhoneLogin = async (req, res, next) => {
+    try {
+        const { idToken, name } = req.body;
+        if (!idToken) {
+            return res.status(400).json({ success: false, message: 'Firebase ID Token is required' });
+        }
+
+        const decoded = await verifyFirebaseIdToken(idToken);
+        const phone = decoded.phone_number;
+
+        if (!phone) {
+            return res.status(400).json({ success: false, message: 'No phone number attached to this Firebase token' });
+        }
+
+        // Find user by phone number
+        let user = await User.findOne({ phone, isDeleted: false });
+
+        if (!user) {
+            // New user registration via phone
+            user = new User({
+                name: (name && name.trim()) || `User ${phone.slice(-4)}`,
+                phone: phone.trim(),
+                age: 21,
+                isOnboarded: false,
+            });
+            await user.save();
+        }
+
+        const accessToken = signAccess(user._id);
+        const refreshToken = signRefresh(user._id);
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        return res.json({
+            success: true,
+            token: accessToken,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                age: user.age,
+                gender: user.gender,
+                isEliteAgent: user.isEliteAgent || false,
+                isStaff: user.isStaff || false,
+                role: user.role || 'user',
+                wallet: user.wallet || {},
+                payoutDetails: user.payoutDetails || {},
+                isOnboarded: user.isOnboarded,
+                membership: user.membership,
+                photos: user.photos,
+            },
+        });
+    } catch (err) {
+        console.error('[firebasePhoneLogin] Error:', err.message);
+        return res.status(401).json({
+            success: false,
+            message: err.message || 'Firebase phone authentication failed'
+        });
+    }
+};
+
+module.exports = {
+    register,
+    login,
+    refreshToken,
+    logout,
+    forgotPassword,
+    resetPassword,
+    sendOtp,
+    verifyOtp,
+    verifyFirebaseToken,
+    firebasePhoneLogin
+};

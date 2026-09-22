@@ -2,7 +2,18 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { register, login, refreshToken, logout, forgotPassword, resetPassword, sendOtp, verifyOtp } = require('../controllers/authController');
+const {
+    register,
+    login,
+    refreshToken,
+    logout,
+    forgotPassword,
+    resetPassword,
+    sendOtp,
+    verifyOtp,
+    verifyFirebaseToken,
+    firebasePhoneLogin
+} = require('../controllers/authController');
 const { authLimiter, registerLimiter, otpLimiter } = require('../middlewares/rateLimiter');
 const { protect } = require('../middlewares/auth');
 
@@ -32,5 +43,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', resetPassword);
 router.post('/send-otp', optionalProtect, otpLimiter, sendOtp);
 router.post('/verify-otp', optionalProtect, verifyOtp);
+router.post('/firebase-verify', optionalProtect, verifyFirebaseToken);
+router.post('/firebase-login', authLimiter, firebasePhoneLogin);
 
 module.exports = router;
