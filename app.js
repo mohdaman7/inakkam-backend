@@ -59,11 +59,13 @@ app.use(cors({
         if (
             !origin || 
             allowedOrigins.includes(origin) ||
+            /^https?:\/\/([a-zA-Z0-9-]+\.)?inakkam\.co$/.test(origin) ||
             /^http:\/\/localhost(:\d+)?$/.test(origin) ||
             /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
         ) {
             callback(null, true);
         } else {
+            console.warn(`[CORS Blocked] Origin: ${origin}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
