@@ -1,5 +1,3 @@
-const { initializeApp, cert, getApps } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
 const path = require('path');
 const fs = require('fs');
 
@@ -7,6 +5,8 @@ let firebaseApp = null;
 let firebaseAuth = null;
 
 try {
+    const { initializeApp, cert, getApps } = require('firebase-admin/app');
+    const { getAuth } = require('firebase-admin/auth');
     const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
 
     if (fs.existsSync(serviceAccountPath)) {
@@ -24,7 +24,7 @@ try {
         console.warn('⚠️ [Firebase Admin] config/serviceAccountKey.json not found. Firebase token verification disabled.');
     }
 } catch (error) {
-    console.error('❌ [Firebase Admin] Initialization error:', error.message);
+    console.warn('⚠️ [Firebase Admin] Initialization warning:', error.message);
 }
 
 /**
